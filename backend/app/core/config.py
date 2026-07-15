@@ -51,10 +51,14 @@ class Settings(BaseSettings):
     # ── YouTube Processing ──────────────────────────────────────
     YTDLP_PATH: str = "yt-dlp"
     FFMPEG_PATH: str = "ffmpeg"
+    FFPROBE_PATH: str = "ffprobe"
     WHISPER_MODEL: str = "base"  # tiny | base | small | medium | large
 
     # ── Storage ──────────────────────────────────────────────────
     STORAGE_BUCKET: str = "yt-notes"
+
+    # ── Temp Files ──────────────────────────────────────────────
+    TEMP_DIR: str = "/tmp/yt-notes"
 
 
 @lru_cache

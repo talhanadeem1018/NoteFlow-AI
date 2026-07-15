@@ -1,9 +1,14 @@
-"""Video metadata endpoint – extracts YouTube video info via yt-dlp."""
+"""Video endpoints – metadata extraction and audio processing."""
 
 from fastapi import APIRouter
 
 from app.core.exceptions import AppError
-from app.schemas.video import VideoMetadataResponse, VideoURLRequest
+from app.schemas.video import (
+    AudioResponse,
+    VideoMetadataResponse,
+    VideoURLRequest,
+)
+from app.services.audio import download_and_convert_audio
 from app.services.youtube import fetch_video_metadata
 
 router = APIRouter()
@@ -24,3 +29,20 @@ async def get_video_metadata(body: VideoURLRequest) -> VideoMetadataResponse:
     """Fetch metadata for a YouTube video by URL."""
     metadata = await fetch_video_metadata(body.url)
     return VideoMetadataResponse(data=metadata)
+
+
+@router.post(
+    "/audio",
+    response_model=AudioResponse,
+    summary="Download and convert video audio",
+    description="Download audio from a YouTube video and convert to Whisper-compatible WAV format.",
+    responses={
+        404: {"description": "Video not found, private, or unavailable"},
+        422: {"description": "Invalid YouTube URL"},
+        500: {"description": "Download or conversion failed"},
+    },
+)
+async def download_audio(body: VideoURLRequest) -> AudioResponse:
+    """Download and convert audio for a YouTube video."""
+    audio_info = await download_and_convert_audio(body.url)
+    return AudioResponse(data=audio_info)

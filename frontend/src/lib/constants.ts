@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
     root: "/videos",
     byId: (id: string) => `/videos/${id}`,
     metadata: "/videos/metadata",
+    audio: "/videos/audio",
     process: "/videos/process",
   },
   auth: {

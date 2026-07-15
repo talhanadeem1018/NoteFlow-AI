@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -9,12 +10,21 @@ from fastapi.responses import JSONResponse
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import AppError
+from app.services.audio import cleanup_stale_audio_files
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan – startup and shutdown events."""
     # Startup: initialize DB connections, caches, etc.
+    try:
+        removed = cleanup_stale_audio_files(max_age_hours=24)
+        if removed > 0:
+            logger.info("Startup cleanup: removed %d stale audio file(s)", removed)
+    except Exception as e:
+        logger.warning("Startup audio cleanup failed: %s", e)
     yield
     # Shutdown: close connections, cleanup resources
 

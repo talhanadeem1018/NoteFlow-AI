@@ -36,3 +36,20 @@ class VideoMetadataResponse(BaseSchema):
 
     data: VideoMetadata
     message: str = "Video metadata fetched successfully"
+
+
+class AudioInfo(BaseSchema):
+    """Information about the downloaded audio file."""
+
+    video_id: str = Field(..., description="YouTube video ID")
+    audio_path: str = Field(..., description="Path to the converted audio file")
+    duration: int | None = Field(None, description="Audio duration in seconds")
+    file_size: int = Field(..., description="File size in bytes")
+    audio_format: str = Field(..., description="Audio format (e.g. wav, mp3)")
+
+
+class AudioResponse(BaseSchema):
+    """Wrapper response for audio download."""
+
+    data: AudioInfo
+    message: str = "Audio downloaded and converted successfully"

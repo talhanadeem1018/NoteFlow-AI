@@ -62,6 +62,20 @@ export interface VideoMetadataResponse {
   message: string;
 }
 
+/** Information about a downloaded audio file */
+export interface AudioInfo {
+  video_id: string;
+  audio_path: string;
+  duration: number | null;
+  file_size: number;
+  audio_format: string;
+}
+
+export interface AudioResponse {
+  data: AudioInfo;
+  message: string;
+}
+
 // ─── Note Types ───────────────────────────────────────────────────────
 
 export type NoteType = "summary" | "notes" | "quiz" | "flashcards";

@@ -29,3 +29,10 @@ class VideoProcessingError(AppError):
 
     def __init__(self, detail: str = "Failed to process video metadata"):
         super().__init__(detail=detail, status_code=500)
+
+
+class AudioDownloadError(AppError):
+    """Error during audio download or conversion."""
+
+    def __init__(self, detail: str = "Failed to download or convert audio"):
+        super().__init__(detail=detail, status_code=500)
