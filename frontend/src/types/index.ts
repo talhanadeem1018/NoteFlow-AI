@@ -44,6 +44,24 @@ export interface Video {
   createdAt: string;
 }
 
+/** Metadata extracted from a YouTube video via yt-dlp */
+export interface VideoMetadata {
+  video_id: string;
+  title: string;
+  channel: string;
+  duration: number | null;
+  thumbnail_url: string | null;
+  description: string | null;
+  upload_date: string | null;
+  view_count: number | null;
+  tags: string[];
+}
+
+export interface VideoMetadataResponse {
+  data: VideoMetadata;
+  message: string;
+}
+
 // ─── Note Types ───────────────────────────────────────────────────────
 
 export type NoteType = "summary" | "notes" | "quiz" | "flashcards";

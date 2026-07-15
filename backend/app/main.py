@@ -2,11 +2,13 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.exceptions import AppError
 
 
 @asynccontextmanager
@@ -29,7 +31,15 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS middleware
+    # ── Exception handlers ──────────────────────────────────────
+    @app.exception_handler(AppError)
+    async def app_error_handler(request: Request, exc: AppError):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "status_code": exc.status_code},
+        )
+
+    # ── CORS middleware ──────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -38,7 +48,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Include API router
+    # ── Include API router ──────────────────────────────────────
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
     @app.get("/health", tags=["Health"])
