@@ -1,4 +1,4 @@
-# AI YouTube Notes Generator
+# NoteFlow AI
 
 A production-ready AI SaaS application that extracts video metadata, audio, transcript, and description from YouTube videos to generate high-quality study notes, summaries, quizzes, and flashcards using AI.
 
@@ -55,7 +55,7 @@ A production-ready AI SaaS application that extracts video metadata, audio, tran
 ## Project Structure
 
 ```
-ai-youtube-notes/
+noteflow-ai/
 ├── frontend/              # React + TypeScript + Vite
 │   ├── src/
 │   │   ├── components/    # Reusable UI components

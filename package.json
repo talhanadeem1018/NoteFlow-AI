@@ -1,8 +1,8 @@
 {
-  "name": "ai-youtube-notes",
+  "name": "noteflow-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-powered YouTube video notes and study material generator",
+  "description": "AI-powered video notes and study material generator by NoteFlow AI",
   "author": "Your Name",
   "license": "MIT",
   "scripts": {

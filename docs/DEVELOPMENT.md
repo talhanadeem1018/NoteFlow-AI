@@ -12,7 +12,7 @@
 ```bash
 # 1. Clone the repo
 git clone <repo-url>
-cd ai-youtube-notes
+cd noteflow-ai
 
 # 2. Install all dependencies
 npm run install:all

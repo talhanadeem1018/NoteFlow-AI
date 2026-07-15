@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     # ── Application ──────────────────────────────────────────────
-    PROJECT_NAME: str = "AI YouTube Notes API"
+    PROJECT_NAME: str = "NoteFlow AI API"
     VERSION: str = "0.1.0"
     API_V1_PREFIX: str = "/api/v1"
     DEBUG: bool = False
@@ -55,10 +55,10 @@ class Settings(BaseSettings):
     WHISPER_MODEL: str = "base"  # tiny | base | small | medium | large
 
     # ── Storage ──────────────────────────────────────────────────
-    STORAGE_BUCKET: str = "yt-notes"
+    STORAGE_BUCKET: str = "noteflow-ai"
 
     # ── Temp Files ──────────────────────────────────────────────
-    TEMP_DIR: str = "/tmp/yt-notes"
+    TEMP_DIR: str = "/tmp/noteflow-ai"
 
 
 @lru_cache

@@ -1,8 +1,8 @@
-# AI YouTube Notes Generator – Architecture
+# NoteFlow AI – Architecture
 
 ## Overview
 
-This document describes the high-level architecture, design decisions, and conventions for the AI YouTube Notes Generator project.
+This document describes the high-level architecture, design decisions, and conventions for the NoteFlow AI project.
 
 ---
 

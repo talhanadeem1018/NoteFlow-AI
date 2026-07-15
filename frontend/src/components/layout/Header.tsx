@@ -7,7 +7,7 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link to="/" className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-sm font-bold text-white">
-            Y
+            N
           </span>
           <span className="text-lg font-bold text-gray-900 dark:text-white">
             {APP_NAME}

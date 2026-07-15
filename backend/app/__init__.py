@@ -1,1 +1,1 @@
-"""AI YouTube Notes Generator – Backend API."""
+"""NoteFlow AI – Backend API."""
