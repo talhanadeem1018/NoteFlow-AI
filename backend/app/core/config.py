@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     ]
 
     # ── Database (Supabase PostgreSQL) ───────────────────────────
-    DATABASE_URL: str = ""
+    DATABASE_URL: str = ""  # async pooler URL for FastAPI
+    DIRECT_URL: str = ""      # direct URL for Alembic migrations
 
     # ── Supabase ─────────────────────────────────────────────────
     SUPABASE_URL: str = ""
