@@ -73,21 +73,45 @@ def _download_audio(url: str, output_path: str) -> str:
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            
+            print("=" * 60)
+            print("PREPARE_FILENAME:", filename)
+            print("EXISTS:", os.path.exists(filename))
+            print("=" * 60)
+            
+            print("=" * 60)
+            print("INFO EXT:", info.get("ext"))
+            print("REQUESTED OUTPUT:", output_path)
+
+            folder = Path(output_path).parent
+
+            print("FILES IN TEMP DIRECTORY:")
+            for f in folder.iterdir():
+                print(" -", f.name)
+
+            print("=" * 60)
+    
             if info is None:
                 raise AudioDownloadError("No info returned from yt-dlp")
+    
+            folder = Path(output_path).parent
+            base = Path(output_path).name
 
-            # yt-dlp appends the extension, so find the actual file
-            ext = info.get("ext", "webm")
-            actual_path = f"{output_path}.{ext}"
+            matches = list(folder.glob(base + "*"))
 
-            if not os.path.exists(actual_path):
-                # Try common extensions
-                for try_ext in ["webm", "mp3", "m4a", "opus", "ogg", "wav"]:
-                    candidate = f"{output_path}.{try_ext}"
-                    if os.path.exists(candidate):
-                        actual_path = candidate
-                        break
+            print("FOUND FILES:", matches)
 
+            if not matches:
+                raise AudioDownloadError("Downloaded audio file not found.")
+
+            actual_path = str(matches[0])
+                    
+            print("=" * 60)
+            print("Downloaded file:", actual_path)
+            print("Exists:", os.path.exists(actual_path))
+            print("=" * 60)
+    
             return actual_path
 
     except yt_dlp.utils.DownloadError as e:

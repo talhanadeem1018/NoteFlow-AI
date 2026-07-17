@@ -1,3 +1,8 @@
+from functools import lru_cache
+from pathlib import Path
+import tempfile
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 """Core configuration using Pydantic Settings."""
 
 from functools import lru_cache
@@ -59,7 +64,7 @@ class Settings(BaseSettings):
     STORAGE_BUCKET: str = "noteflow-ai"
 
     # ── Temp Files ──────────────────────────────────────────────
-    TEMP_DIR: str = "/tmp/noteflow-ai"
+    TEMP_DIR: str = str(Path(tempfile.gettempdir()) / "noteflow-ai")
 
 
 @lru_cache
