@@ -15,7 +15,8 @@ import logging
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.security import verify_supabase_token
 from app.schemas.auth import AuthUser
@@ -23,46 +24,17 @@ from app.schemas.auth import AuthUser
 logger = logging.getLogger(__name__)
 
 
-def _extract_bearer_token(authorization: str | None) -> str:
-    """Extract the access token from the ``Authorization`` header.
-
-    Args:
-        authorization: The raw ``Authorization`` header value.
-
-    Returns:
-        The extracted Bearer token string.
-
-    Raises:
-        HTTPException: 401 if the header is missing or malformed.
-    """
-    if not authorization:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header format. Expected 'Bearer <token>'",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return parts[1]
-
-
 def get_current_user(
-    authorization: Annotated[str | None, Header()] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Security(HTTPBearer())] = None,
 ) -> AuthUser:
     """FastAPI dependency that extracts and verifies the current authenticated user.
 
-    Reads the ``Authorization`` header, extracts the Bearer token, and
-    verifies it against the Supabase JWT public key.
+    Uses ``Security(HTTPBearer())`` so that Swagger UI displays the
+    global **Authorize** button and automatically sends the
+    ``Authorization: Bearer <token>`` header.
 
     Args:
-        authorization: The ``Authorization`` header injected by FastAPI.
+        credentials: The Bearer credentials injected by FastAPI.
 
     Returns:
         An :class:`AuthUser` instance with the verified user's claims.
@@ -73,7 +45,14 @@ def get_current_user(
         HTTPException 403: Token is valid but audience is wrong (should be
             ``"authenticated"``).
     """
-    token = _extract_bearer_token(authorization)
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
 
     try:
         payload = verify_supabase_token(token)
