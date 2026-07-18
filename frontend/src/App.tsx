@@ -7,6 +7,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { RegisterPage } from "@/pages/RegisterPage";
+import { DashboardPage } from "@/pages/DashboardPage";
 import { VideoMetadataPage } from "@/pages/VideoMetadataPage";
 
 export default function App() {
@@ -26,7 +27,7 @@ export default function App() {
 
         {/* Protected routes (redirect to /login if not authenticated) */}
         <Route element={<ProtectedRoute />}>
-          {/* Add protected routes here as they are built */}
+          <Route path="dashboard" element={<DashboardPage />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

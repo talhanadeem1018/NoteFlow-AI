@@ -41,32 +41,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Prevent double-init in React 18 StrictMode (dev).
-  const initialised = useRef(false);
+  // Track whether the component is still mounted. Using a ref (not a
+  // closure variable) so it survives StrictMode unmount/remount cycles.
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    if (initialised.current) return;
-    initialised.current = true;
-
-    let mounted = true;
+    mountedRef.current = true;
 
     // ── 1. Restore existing session ──────────────────────────────
-    supabase.auth
-      .getSession()
-      .then(({ data: { session: current } }) => {
-        if (!mounted) return;
-        setSession(current);
-        setUser(current?.user ?? null);
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      if (!mountedRef.current) return;
+      setSession(s);
+      setUser(s?.user ?? null);
+    }).finally(() => {
+      if (mountedRef.current) setLoading(false);
+    });
 
     // ── 2. Subscribe to auth state changes ───────────────────────
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (!mounted) return;
+      if (!mountedRef.current) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setLoading(false);
@@ -74,7 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // ── 3. Cleanup ───────────────────────────────────────────────
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -88,6 +83,5 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }),
     [user, session, loading],
   );
-
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
