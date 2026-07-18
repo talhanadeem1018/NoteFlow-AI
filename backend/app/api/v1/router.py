@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import videos
+from app.api.v1.endpoints import auth, videos
 
 api_router = APIRouter()
 
@@ -12,10 +12,14 @@ api_router.include_router(
     prefix="/videos",
     tags=["Videos"],
 )
+api_router.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["Auth"],
+)
 
 # ── Placeholder routers (uncomment as features are built) ───────
-# from app.api.v1.endpoints import auth, notes
-# api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
+# from app.api.v1.endpoints import notes
 # api_router.include_router(notes.router, prefix="/notes", tags=["Notes"])
 
 
