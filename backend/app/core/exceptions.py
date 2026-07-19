@@ -36,3 +36,10 @@ class AudioDownloadError(AppError):
 
     def __init__(self, detail: str = "Failed to download or convert audio"):
         super().__init__(detail=detail, status_code=500)
+
+
+class TranscriptionError(AppError):
+    """Error during transcription processing."""
+
+    def __init__(self, detail: str = "Failed to transcribe audio", status_code: int = 500):
+        super().__init__(detail=detail, status_code=status_code)

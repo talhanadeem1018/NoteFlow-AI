@@ -30,3 +30,6 @@ google-genai>=1.0.0
 # ── Utilities ───────────────────────────────────────────────────
 python-dotenv>=1.0.1
 httpx>=0.28.0
+
+# ── Whisper (speech-to-text) ───────────────────────────────────
+faster-whisper>=1.1.0

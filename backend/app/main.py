@@ -38,6 +38,14 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # Shutdown: cleanup Whisper model resources
+    try:
+        from app.services.transcription.whisper_service import whisper_service
+        whisper_service.cleanup()  # Release model memory
+        logger.info("Whisper model released.")
+    except Exception as e:
+        logger.warning("Whisper cleanup failed: %s", e)
+
     # Shutdown: dispose of the engine connection pool
     from app.db.session import engine
     await engine.dispose()

@@ -3,3 +3,4 @@
 # Import all models here as they are created so Alembic can detect them.
 from app.models.user import User  # noqa: F401
 from app.models.note import Note  # noqa: F401
+from app.models.transcript import Transcript  # noqa: F401

@@ -58,7 +58,14 @@ class Settings(BaseSettings):
     YTDLP_PATH: str = "yt-dlp"
     FFMPEG_PATH: str = "ffmpeg"
     FFPROBE_PATH: str = "ffprobe"
-    WHISPER_MODEL: str = "base"  # tiny | base | small | medium | large
+
+    # ── Whisper (Speech-to-Text) ───────────────────────────────
+    WHISPER_MODEL: str = "base"  # tiny | base | small | medium | large-v2 | large-v3
+    WHISPER_DEVICE: str = "cpu"  # cpu | cuda
+    WHISPER_COMPUTE_TYPE: str = "int8"  # int8 (CPU) | float16 (GPU) | float32
+    WHISPER_LANGUAGE: str | None = None  # None = auto-detect, or "en", "es", etc.
+    WHISPER_BEAM_SIZE: int = 5
+    WHISPER_VAD_FILTER: bool = True  # Voice Activity Detection for better performance
 
     # ── Storage ──────────────────────────────────────────────────
     STORAGE_BUCKET: str = "noteflow-ai"
