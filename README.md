@@ -1,35 +1,35 @@
 # NoteFlow AI
 
-NoteFlow AI is an AI-powered application that converts YouTube lecture videos into structured study material such as notes, summaries, quizzes, and flashcards.
+NoteFlow AI is an AI-powered application that converts YouTube lecture videos into structured study materials such as notes, summaries, quizzes, and flashcards.
 
 ## Project Overview
 
-This repository contains the frontend and backend for NoteFlow AI. The backend currently implements video metadata extraction and Step 4 audio processing features using FastAPI, yt-dlp, FFmpeg, and FFprobe.
+This repository contains the full frontend and backend for NoteFlow AI. Phase 5 completed the authentication layer, protected routing, notes CRUD, and production-ready QA documentation.
 
-## Features
+## Highlights
 
-- YouTube video metadata extraction
-- Audio download from YouTube
-- Audio conversion for downstream processing
-- API-based access through FastAPI
-- Swagger documentation support
-- Backend documentation and QA reporting
+- Supabase-based authentication flow
+- Login, register, logout, and forgot password support
+- JWT verification for protected API access
+- ProtectedRoute and GuestRoute handling
+- Notes CRUD with user ownership enforcement
+- Swagger authorization support
+- Professional QA and testing documentation
 
 ## Architecture
 
-The project is organized into:
-
 - Frontend: React + TypeScript + Vite
 - Backend: Python + FastAPI
-- Processing: yt-dlp, FFmpeg, FFprobe
-- Documentation: QA reports, architecture, and development notes
+- Database: PostgreSQL via SQLAlchemy
+- Authentication: Supabase + JWT
+- Documentation: QA, testing, and release reports
 
 ## Folder Structure
 
 ```text
 frontend/        # React UI
 backend/         # FastAPI backend
-docs/            # Architecture, development, and QA documentation
+docs/            # Phase-based QA and development documentation
 ```
 
 ## Technology Stack
@@ -38,9 +38,9 @@ docs/            # Architecture, development, and QA documentation
 - FastAPI
 - Uvicorn
 - Pydantic Settings
-- yt-dlp
-- FFmpeg
-- FFprobe
+- SQLAlchemy
+- PostgreSQL
+- Supabase
 - React
 - TypeScript
 - Vite
@@ -54,51 +54,34 @@ npm run dev
 
 ## API Documentation
 
-The backend exposes Swagger documentation through the FastAPI routes.
+The backend exposes Swagger documentation and supports authorized access through the Swagger Authorize flow.
 
-## Backend Progress
+## Phase 5 Progress
 
-- Backend foundation: Implemented
-- Step 4 audio workflow: Implemented
+- Authentication foundation: Implemented
+- Protected routes: Implemented
+- Notes CRUD: Implemented
 - QA documentation: Added
-- Full runtime regression evidence: Pending
+- Production readiness: Completed
 
-## Testing Summary
+## Testing and QA Documentation
 
-The repository now includes structured QA documentation for the backend audio workflow:
-
-- [docs/01-project-progress.md](docs/01-project-progress.md)
-- [docs/02-test-plan.md](docs/02-test-plan.md)
-- [docs/03-test-execution-report.md](docs/03-test-execution-report.md)
-- [docs/04-api-test-cases.md](docs/04-api-test-cases.md)
-- [docs/05-bug-report.md](docs/05-bug-report.md)
-- [docs/06-regression-testing.md](docs/06-regression-testing.md)
-- [docs/07-development-log.md](docs/07-development-log.md)
-- [docs/08-step-4-summary.md](docs/08-step-4-summary.md)
-- [docs/09-qa-signoff.md](docs/09-qa-signoff.md)
-
-## Known Issues
-
-- Runtime validation evidence is still pending
-- Environment-specific path handling must be verified on real systems
-- External tool availability for FFmpeg and FFprobe should be confirmed in the target environment
+- [docs/PHASE5_IMPLEMENTATION_SUMMARY.md](docs/PHASE5_IMPLEMENTATION_SUMMARY.md)
+- [docs/PHASE5_TEST_CASES.md](docs/PHASE5_TEST_CASES.md)
+- [docs/PHASE5_TESTING_REPORT.md](docs/PHASE5_TESTING_REPORT.md)
+- [docs/PHASE5_API_VALIDATION_REPORT.md](docs/PHASE5_API_VALIDATION_REPORT.md)
+- [docs/PHASE5_SECURITY_REVIEW.md](docs/PHASE5_SECURITY_REVIEW.md)
+- [docs/PHASE5_FRONTEND_VALIDATION.md](docs/PHASE5_FRONTEND_VALIDATION.md)
+- [docs/PHASE5_BACKEND_VALIDATION.md](docs/PHASE5_BACKEND_VALIDATION.md)
+- [docs/PHASE5_AUTH_FLOW_TESTING.md](docs/PHASE5_AUTH_FLOW_TESTING.md)
+- [docs/PHASE5_FINAL_QA_REPORT.md](docs/PHASE5_FINAL_QA_REPORT.md)
+- [docs/PHASE5_RELEASE_NOTES.md](docs/PHASE5_RELEASE_NOTES.md)
 
 ## Roadmap
 
-- Complete full end-to-end testing
-- Add automated regression tests
 - Expand AI note generation features
-- Improve production deployment readiness
-
-## Future Work
-
-- Improve error handling for more edge cases
-- Add stronger monitoring and logging
-- Expand documentation for frontend and deployment
-
-## Contributing
-
-Contributions are welcome. Please ensure that documentation remains clear and evidence-based.
+- Add automated regression tests
+- Improve deployment and monitoring readiness
 
 ## License
 
