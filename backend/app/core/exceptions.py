@@ -43,3 +43,53 @@ class TranscriptionError(AppError):
 
     def __init__(self, detail: str = "Failed to transcribe audio", status_code: int = 500):
         super().__init__(detail=detail, status_code=status_code)
+
+
+# ── AI Provider Exceptions ────────────────────────────────────────
+class AIProviderError(AppError):
+    """Error from AI provider API."""
+
+    def __init__(self, detail: str = "AI provider request failed", status_code: int = 500):
+        super().__init__(detail=detail, status_code=status_code)
+
+
+class AIRateLimitError(AIProviderError):
+    """Rate limit exceeded by AI provider."""
+
+    def __init__(self, detail: str = "Rate limit exceeded. Please try again later."):
+        super().__init__(detail=detail, status_code=429)
+
+
+class AITimeoutError(AIProviderError):
+    """AI provider request timed out."""
+
+    def __init__(self, detail: str = "AI request timed out. Please try again."):
+        super().__init__(detail=detail, status_code=504)
+
+
+class AIResponseError(AIProviderError):
+    """Invalid response from AI provider."""
+
+    def __init__(self, detail: str = "Invalid response from AI provider"):
+        super().__init__(detail=detail, status_code=502)
+
+
+class TranscriptNotFoundError(AppError):
+    """Transcript not found or unauthorized."""
+
+    def __init__(self, detail: str = "Transcript not found or unauthorized"):
+        super().__init__(detail=detail, status_code=404)
+
+
+class TranscriptEmptyError(AppError):
+    """Transcript is empty."""
+
+    def __init__(self, detail: str = "Transcript is empty"):
+        super().__init__(detail=detail, status_code=422)
+
+
+class NotesNotFoundError(AppError):
+    """Notes not found."""
+
+    def __init__(self, detail: str = "Notes not found"):
+        super().__init__(detail=detail, status_code=404)

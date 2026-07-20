@@ -1,6 +1,14 @@
-"""Note endpoints – CRUD operations scoped to the authenticated user."""
+"""Note endpoints – CRUD operations and AI notes generation.
+
+Endpoints:
+- POST   /api/v1/notes/generate  → Generate AI notes from transcript
+- GET    /api/v1/notes/{id}      → Get a single note (AI or manual)
+- GET    /api/v1/notes           → List notes for authenticated user
+- DELETE /api/v1/notes/{id}      → Delete a note
+"""
 
 import uuid
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.db.session import get_db
 from app.schemas.auth import AuthUser
-from app.schemas.note import NoteCreate, NoteListResponse, NoteRead, NoteUpdate
+from app.schemas.note import (
+    NoteCreate,
+    NoteGenerateRequest,
+    NoteGenerateResponse,
+    NoteListResponse,
+    NoteRead,
+    NoteUpdate,
+)
+from app.services.ai.notes_generator import NotesGeneratorService
 from app.services.note import (
     create_note,
     delete_note,
@@ -17,29 +33,68 @@ from app.services.note import (
     update_note,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ── AI Notes Generation ──────────────────────────────────────────
 @router.post(
-    "",
-    response_model=NoteRead,
+    "/generate",
+    response_model=NoteGenerateResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a new note",
+    summary="Generate AI notes from a transcript",
     responses={
         401: {"description": "Authentication required"},
+        404: {"description": "Transcript not found"},
+        422: {"description": "Invalid request or empty transcript"},
+        429: {"description": "Rate limit exceeded"},
+        504: {"description": "AI request timed out"},
     },
 )
-async def create(
-    body: NoteCreate,
+async def generate_notes(
+    body: NoteGenerateRequest,
     user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> NoteRead:
-    """Create a note owned by the authenticated user."""
-    user_uuid = uuid.UUID(user.id)
-    note = await create_note(db, user_uuid, body)
-    return NoteRead.model_validate(note)
+) -> NoteGenerateResponse:
+    """Generate structured AI notes from a transcript.
+
+    This endpoint:
+    1. Validates the transcript exists and is owned by the user
+    2. Checks for cached notes (unless force_regenerate=true)
+    3. Generates notes using OpenRouter AI
+    4. Stores and returns the generated notes
+    """
+    from app.core.exceptions import (
+        AIRateLimitError,
+        AIProviderError,
+        AITimeoutError,
+        AppError,
+    )
+
+    generator = NotesGeneratorService(db)
+    try:
+        response = await generator.generate_notes(body, user.id)
+        return response
+    except AppError as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail,
+        )
+    except (AIProviderError, AIRateLimitError, AITimeoutError) as e:
+        logger.error("AI generation failed: %s", e)
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail,
+        )
+    except Exception as e:
+        logger.error("Unexpected error during note generation: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate notes: {str(e)}",
+        )
 
 
+# ── CRUD Endpoints (work for both manual and AI notes) ───────────
 @router.get(
     "",
     response_model=NoteListResponse,
@@ -54,7 +109,7 @@ async def list(
     user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> NoteListResponse:
-    """Return all notes belonging to the authenticated user."""
+    """Return all notes (manual and AI-generated) belonging to the authenticated user."""
     user_uuid = uuid.UUID(user.id)
     notes, total = await list_notes(db, user_uuid, offset=offset, limit=limit)
     return NoteListResponse(
@@ -77,7 +132,7 @@ async def get(
     user: AuthUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> NoteRead:
-    """Return a single note if it belongs to the authenticated user."""
+    """Return a single note (AI-generated or manual) if it belongs to the authenticated user."""
     user_uuid = uuid.UUID(user.id)
     note = await get_note_by_id(db, note_id, user_uuid)
     if note is None:
@@ -85,6 +140,26 @@ async def get(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Note not found",
         )
+    return NoteRead.model_validate(note)
+
+
+@router.post(
+    "",
+    response_model=NoteRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new note",
+    responses={
+        401: {"description": "Authentication required"},
+    },
+)
+async def create(
+    body: NoteCreate,
+    user: AuthUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> NoteRead:
+    """Create a note owned by the authenticated user."""
+    user_uuid = uuid.UUID(user.id)
+    note = await create_note(db, user_uuid, body)
     return NoteRead.model_validate(note)
 
 

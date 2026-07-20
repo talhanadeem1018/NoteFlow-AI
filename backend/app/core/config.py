@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # Default AI provider: "openai" | "anthropic" | "google"
     DEFAULT_AI_PROVIDER: str = "openai"
 
+    # ── OpenRouter (AI Routing Layer) ──────────────────────────
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    DEFAULT_LLM_MODEL: str = "google/gemini-2.5-flash"
+
     # ── YouTube Processing ──────────────────────────────────────
     YTDLP_PATH: str = "yt-dlp"
     FFMPEG_PATH: str = "ffmpeg"
