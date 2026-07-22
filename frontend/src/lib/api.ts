@@ -8,7 +8,7 @@ import axios from "axios";
  */
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "/api/v1",
-  timeout: 60_000, // 60 seconds – transcription/AI can take a while
+  timeout: 300_000, // 5 minutes – transcription/AI can take a while
   headers: {
     "Content-Type": "application/json",
   },

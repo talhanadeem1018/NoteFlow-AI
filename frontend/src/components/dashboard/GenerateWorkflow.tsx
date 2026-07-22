@@ -22,7 +22,7 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const trimmed = url.trim();
     if (!trimmed) {
       addToast("Please enter a YouTube URL", "warning");
@@ -36,11 +36,14 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
       return;
     }
 
+    // Clear stale metadata from any previous request before starting
+    setMetadata(null);
+
     try {
       // Step 1: Fetch metadata
       setStep("metadata");
       addToast("Fetching video metadata...", "info");
-      
+
       const metadataResult = await fetchMetadata.mutateAsync({ url: trimmed });
       setMetadata(metadataResult);
       addToast("Video metadata fetched!", "success");
@@ -48,23 +51,23 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
       // Step 2: Transcribe
       setStep("transcribing");
       addToast("Starting transcription...", "info");
-      
+
       const transcriptionResult = await startTranscription.mutateAsync({ url: trimmed });
       addToast("Transcription complete!", "success");
 
       // Step 3: Generate notes
       setStep("generating");
       addToast("Generating AI notes...", "info");
-      
+
       const noteResult = await generateNote.mutateAsync({
         transcript_id: transcriptionResult.id,
         force_regenerate: false,
       });
-      
+
       setStep("done");
       addToast("Notes generated successfully!", "success");
       onNoteGenerated(noteResult);
-      
+
       // Reset form
       setUrl("");
       setMetadata(null);
@@ -72,6 +75,9 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.message || "An error occurred";
       addToast(message, "error");
+      // Reset stale state so the form doesn't show previous video's thumbnail
+      setMetadata(null);
+      setUrl("");
       setStep("idle");
     }
   };
@@ -143,7 +149,7 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
           type="submit"
           size="lg"
           loading={isLoading}
-          disabled={!url.trim()}
+          disabled={!url.trim() || isLoading}
           className="w-full"
         >
           {isLoading ? "Processing..." : "Generate Notes"}
