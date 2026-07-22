@@ -106,26 +106,31 @@ class AIClient:
             payload["response_format"] = response_format
 
         try:
-            logger.info("Calling OpenRouter API with model=%s", model)
+            logger.info("[AI_CLIENT] Calling OpenRouter API with model=%s", model)
+            logger.info("[AI_CLIENT] Payload size: %d messages, max_tokens=%d",
+                       len(payload.get("messages", [])), max_tokens)
             response = await self._client.post("/chat/completions", json=payload)
             response.raise_for_status()
 
             data = response.json()
             processing_time = time.time() - start_time
+            logger.info("[AI_CLIENT] Response received in %.2fs", processing_time)
 
             # Extract content from response
             choices = data.get("choices", [])
             if not choices:
+                logger.error("[AI_CLIENT] No choices in response: %s", data)
                 raise AIProviderError("No choices returned from AI provider")
 
             content = choices[0].get("message", {}).get("content", "")
             usage = data.get("usage", {})
 
             logger.info(
-                "AI completion successful: model=%s, tokens=%d, time=%.2fs",
+                "[AI_CLIENT] Success: model=%s, tokens=%d, time=%.2fs, content_len=%d",
                 model,
                 usage.get("total_tokens", 0),
                 processing_time,
+                len(content),
             )
 
             return {
@@ -137,7 +142,7 @@ class AIClient:
 
         except httpx.TimeoutException as e:
             processing_time = time.time() - start_time
-            logger.error("AI request timed out after %.2fs: %s", processing_time, e)
+            logger.exception("[AI_CLIENT] Request timed out after %.2fs", processing_time)
             raise AITimeoutError(f"AI request timed out: {str(e)}") from e
 
         except httpx.HTTPStatusError as e:
@@ -145,7 +150,7 @@ class AIClient:
             processing_time = time.time() - start_time
 
             if status_code == 429:
-                logger.warning("Rate limit exceeded")
+                logger.warning("[AI_CLIENT] Rate limit exceeded")
                 raise AIRateLimitError("Rate limit exceeded") from e
 
             # Try to extract error message from response
@@ -155,8 +160,8 @@ class AIClient:
             except Exception:
                 error_message = str(e)
 
-            logger.error(
-                "AI request failed: status=%d, error=%s, time=%.2fs",
+            logger.exception(
+                "[AI_CLIENT] HTTP error: status=%d, error=%s, time=%.2fs",
                 status_code,
                 error_message,
                 processing_time,
@@ -168,9 +173,7 @@ class AIClient:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.error(
-                "Unexpected AI request error: %s, time=%.2fs", e, processing_time
-            )
+            logger.exception("[AI_CLIENT] Unexpected error after %.2fs", processing_time)
             raise AIProviderError(f"AI request failed: {str(e)}") from e
 
     async def generate_json(

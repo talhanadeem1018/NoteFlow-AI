@@ -75,40 +75,46 @@ class NotesGeneratorService:
         """
         start_time = time.time()
 
+        logger.info("[NOTES] generate_notes called: transcript_id=%s, user_id=%s",
+                   request.transcript_id, user_id)
+
         # Parse user ID
         try:
             user_uuid = uuid.UUID(user_id)
         except ValueError:
+            logger.exception("[NOTES] Invalid user ID format: %s", user_id)
             raise AppError("Invalid user ID format", status_code=400)
 
         # Parse transcript ID
         try:
             transcript_uuid = uuid.UUID(request.transcript_id)
         except ValueError:
+            logger.exception("[NOTES] Invalid transcript ID format: %s", request.transcript_id)
             raise AppError("Invalid transcript ID format", status_code=400)
 
         # Step 1: Validate transcript exists and is owned by user
+        logger.info("[NOTES] Step 1: Validating transcript (id=%s)", transcript_uuid)
         transcript = await self._validate_transcript(transcript_uuid, user_uuid)
+        logger.info("[NOTES] Step 1 complete: transcript found, length=%d chars",
+                   len(transcript.full_text) if transcript.full_text else 0)
 
         # Step 2: Check for cached notes (unless force_regenerate)
         if not request.force_regenerate:
+            logger.info("[NOTES] Step 2: Checking for cached notes...")
             cached_note = await self._get_cached_notes(
                 transcript_uuid, user_uuid
             )
             if cached_note:
-                logger.info(
-                    "Returning cached notes for transcript %s",
-                    request.transcript_id,
-                )
+                logger.info("[NOTES] Step 2: Found cached notes (id=%s), returning", cached_note.id)
                 processing_time = time.time() - start_time
                 return self._build_response(cached_note, processing_time)
+            logger.info("[NOTES] Step 2: No cached notes found")
+        else:
+            logger.info("[NOTES] Step 2: Skipping cache check (force_regenerate=True)")
 
         # Step 3: Generate notes using AI
-        logger.info(
-            "Generating notes for transcript %s (user=%s)",
-            request.transcript_id,
-            user_id,
-        )
+        logger.info("[NOTES] Step 3: Generating notes via AI (transcript length=%d chars)",
+                   len(transcript.full_text) if transcript.full_text else 0)
 
         try:
             ai_result = await self.ai_service.generate_notes(
@@ -119,24 +125,28 @@ class NotesGeneratorService:
                 custom_instructions=request.custom_instructions,
             )
         except (AIProviderError, AIRateLimitError, AITimeoutError) as e:
-            logger.error("AI generation failed: %s", e)
+            logger.exception("[NOTES] AI generation failed with provider error")
             raise
         except Exception as e:
-            logger.error("Unexpected AI error: %s", e)
+            logger.exception("[NOTES] Unexpected AI error")
             raise AIProviderError(f"AI generation failed: {str(e)}") from e
 
+        logger.info("[NOTES] Step 3 complete: AI result received")
+
         # Step 4: Store notes in database
+        logger.info("[NOTES] Step 4: Storing notes in database...")
         note = await self._store_notes(
             transcript_id=transcript_uuid,
             user_id=user_uuid,
             transcript=transcript,
             ai_result=ai_result,
         )
+        logger.info("[NOTES] Step 4 complete: note_id=%s", note.id)
 
         # Step 5: Build and return response
         processing_time = time.time() - start_time
         logger.info(
-            "Notes generated and stored: note_id=%s, time=%.2fs",
+            "[NOTES] Step 5: Complete - note_id=%s, total_time=%.2fs",
             note.id,
             processing_time,
         )
@@ -355,7 +365,7 @@ class NotesGeneratorService:
         )
 
         self.db.add(note)
-        await self.db.flush()
+        await self.db.commit()
         await self.db.refresh(note)
 
         logger.info(

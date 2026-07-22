@@ -87,7 +87,7 @@ class WhisperService:
             or self._compute_type != compute_type
         ):
             logger.info(
-                "Loading Whisper model: %s (device=%s, compute_type=%s)",
+                "[WHISPER] Loading model: %s (device=%s, compute_type=%s)",
                 model_name,
                 device,
                 compute_type,
@@ -105,11 +105,12 @@ class WhisperService:
                 self._compute_type = compute_type
 
                 load_time = time.time() - start_time
-                logger.info("Whisper model loaded in %.2f seconds", load_time)
+                logger.info("[WHISPER] Model loaded in %.2f seconds", load_time)
             except Exception as e:
-                logger.error("Failed to load Whisper model: %s", e)
+                logger.exception("[WHISPER] Failed to load model")
                 raise RuntimeError(f"Failed to load Whisper model: {e}") from e
 
+        logger.info("[WHISPER] Model ready: %s on %s", self._model_name, self._device)
         return self._model
 
     async def transcribe(
@@ -148,7 +149,7 @@ class WhisperService:
         effective_language = language or settings.WHISPER_LANGUAGE
 
         logger.info(
-            "Starting transcription: %s (language=%s, beam_size=%d)",
+            "[WHISPER] Starting transcription: %s (language=%s, beam_size=%d)",
             audio_path,
             effective_language or "auto",
             effective_beam_size,
@@ -157,18 +158,24 @@ class WhisperService:
 
         def _run_transcription() -> tuple[Any, Any]:
             """Synchronous transcription call (runs in thread)."""
+            logger.info("[WHISPER] _run_transcription: ensuring model...")
             model = self._ensure_model()
-            return model.transcribe(
+            logger.info("[WHISPER] _run_transcription: calling model.transcribe()...")
+            result = model.transcribe(
                 audio_path,
                 language=effective_language,
                 beam_size=effective_beam_size,
                 vad_filter=effective_vad_filter,
                 word_timestamps=True,
             )
+            logger.info("[WHISPER] _run_transcription: model.transcribe() returned")
+            return result
 
         try:
             # Run CPU-bound transcription in thread pool
+            logger.info("[WHISPER] Running transcription in thread pool...")
             segments_generator, info = await asyncio.to_thread(_run_transcription)
+            logger.info("[WHISPER] Thread returned, consuming segments generator...")
 
             # Collect segments (generator must be consumed)
             segments = []
@@ -200,7 +207,7 @@ class WhisperService:
             )
 
             logger.info(
-                "Transcription complete: %.1fs audio in %.2fs processing time, "
+                "[WHISPER] Complete: %.1fs audio in %.2fs processing time, "
                 "language=%s (%.2f%% confidence), %d segments",
                 info.duration,
                 processing_time,
@@ -213,10 +220,9 @@ class WhisperService:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.error(
-                "Transcription failed after %.2fs: %s",
+            logger.exception(
+                "[WHISPER] Transcription failed after %.2fs",
                 processing_time,
-                e,
             )
             raise RuntimeError(f"Transcription failed: {e}") from e
 

@@ -16,8 +16,11 @@ engine = create_async_engine(
     echo=settings.DEBUG,
     pool_size=5,
     max_overflow=10,
-    pool_pre_ping=True,          # verify connections before use
-    pool_recycle=300,             # recycle connections every 5 min
+    pool_pre_ping=True,             # verify connections before use
+    pool_recycle=300,               # recycle connections every 5 min
+    connect_args={
+        "statement_cache_size": 0,  # disable asyncpg prepared stmts for PgBouncer transaction pooling
+    },
 )
 
 # ── Session factory ──────────────────────────────────────────────────

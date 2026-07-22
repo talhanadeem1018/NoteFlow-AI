@@ -62,30 +62,35 @@ class AIService:
         Raises:
             AIProviderError: AI generation failed.
         """
+        logger.info("[AI] Building prompt messages (text length=%d chars)...", len(transcript_text))
         # Build messages
         messages = self.prompt_builder.build_messages(
             transcript_text=transcript_text,
             custom_instructions=custom_instructions,
         )
+        logger.info("[AI] Messages built: %d messages, model=%s", len(messages), model or "default")
 
         # Generate completion with JSON response
+        logger.info("[AI] Calling client.generate_json...")
         result = await self.client.generate_json(
             messages=messages,
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        logger.info("[AI] Client returned: model=%s, time=%.2fs",
+                   result.get("model"), result.get("processing_time", 0))
 
         # Validate response structure
         if not self.prompt_builder.validate_response(result["data"]):
-            logger.error("Invalid AI response structure")
+            logger.error("[AI] Invalid response structure: %s", list(result["data"].keys()))
             raise AIProviderError(
                 "AI response missing required fields",
                 status_code=500,
             )
 
         logger.info(
-            "Notes generated successfully: model=%s, time=%.2fs",
+            "[AI] Notes generated successfully: model=%s, time=%.2fs",
             result["model"],
             result["processing_time"],
         )

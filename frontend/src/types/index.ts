@@ -9,9 +9,6 @@ export interface ApiResponse<T> {
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
 }
 
 export interface ApiError {
@@ -74,6 +71,85 @@ export interface AudioInfo {
 export interface AudioResponse {
   data: AudioInfo;
   message: string;
+}
+
+// ─── Transcription Types ───────────────────────────────────────────────
+
+export interface TranscriptionRequest {
+  url: string;
+  language?: string;
+  beam_size?: number;
+  vad_filter?: boolean;
+  force_reprocess?: boolean;
+}
+
+export interface TranscriptSegment {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+  avg_logprob?: number;
+  no_speech_prob?: number;
+  compression_ratio?: number;
+}
+
+export interface TranscriptionResponse {
+  id: string;
+  video_id: string;
+  video_url: string;
+  full_text: string;
+  detected_language: string;
+  language_probability: number;
+  duration: number;
+  segments: TranscriptSegment[];
+  segment_count: number;
+  processing_time: number;
+  model_used: string;
+  created_at: string;
+}
+
+export interface TranscriptionStatus {
+  exists: boolean;
+  transcript_id?: string;
+  created_at?: string;
+  language?: string;
+  duration?: number;
+}
+
+export interface TranscriptListResponse {
+  data: TranscriptionResponse[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+// ─── AI Notes Types ────────────────────────────────────────────────────
+
+export interface AINote {
+  id: string;
+  transcript_id?: string;
+  user_id: string;
+  title: string;
+  executive_summary: string;
+  key_concepts: string[];
+  detailed_notes: string;
+  bullet_points: string[];
+  keywords: string[];
+  action_items: string[];
+  conclusion: string;
+  model_used?: string;
+  prompt_version?: string;
+  processing_time: number;
+  created_at: string;
+}
+
+export interface GenerateAINoteRequest {
+  transcript_id: string;
+  force_regenerate?: boolean;
+  model?: string;
+  temperature?: number;
+  max_tokens?: number;
+  custom_instructions?: string;
 }
 
 // ─── Note Types ───────────────────────────────────────────────────────

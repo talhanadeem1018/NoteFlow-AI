@@ -7,12 +7,14 @@
  *      automatically when the user logs in or out from another tab.
  *   3. Unsubscribes on unmount.
  *
- * This context intentionally does NOT expose login / signup / logout helpers.
- * Those belong to a later step.
+ * Uses `INITIAL_SESSION` event (supabase-js v2+) to set initial loading state,
+ * avoiding a redundant manual `getSession()` call. The subscription also
+ * handles `SIGNED_OUT` and `TOKEN_REFRESHED` events for robust session mgmt.
  */
 
 import {
   createContext,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -21,12 +23,14 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { invalidateCachedToken } from "@/lib/api";
 
 export interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
   isAuthenticated: boolean;
+  logout: () => Promise<void>;
 }
 
 // oxlint-ignore next-line only-export-components – context + provider are tightly coupled
@@ -41,37 +45,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Track whether the component is still mounted. Using a ref (not a
-  // closure variable) so it survives StrictMode unmount/remount cycles.
+  // Stable ref to track mount status across StrictMode double-effects
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
 
-    // ── 1. Restore existing session ──────────────────────────────
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      if (!mountedRef.current) return;
-      setSession(s);
-      setUser(s?.user ?? null);
-    }).finally(() => {
-      if (mountedRef.current) setLoading(false);
-    });
-
-    // ── 2. Subscribe to auth state changes ───────────────────────
+    // ── 1. Subscribe to auth state changes ───────────────────────
+    // The `INITIAL_SESSION` event fires synchronously with the current
+    // session on first subscribe, replacing the need for a manual getSession().
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mountedRef.current) return;
+
+      if (event === "SIGNED_OUT") {
+        // User explicitly signed out – clear state immediately
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        invalidateCachedToken();
+        return;
+      }
+
+      // Handle SESSION_INITIAL, SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      setLoading(false);
+
+      // Only set loading=false on the initial event
+      if (event === "INITIAL_SESSION") {
+        setLoading(false);
+      }
     });
 
-    // ── 3. Cleanup ───────────────────────────────────────────────
+    // ── 2. Cleanup ───────────────────────────────────────────────
     return () => {
       mountedRef.current = false;
       subscription.unsubscribe();
     };
+  }, []);
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    // Auth state will be updated by onAuthStateChange listener
   }, []);
 
   const value = useMemo<AuthState>(
@@ -80,8 +96,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       session,
       loading,
       isAuthenticated: user !== null,
+      logout,
     }),
-    [user, session, loading],
+    [user, session, loading, logout],
   );
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -203,16 +203,22 @@ async def download_and_convert_audio(url: str) -> AudioInfo:
 
     try:
         # Step 1: Download audio
+        logger.info("[AUDIO] Starting audio download...")
         downloaded_path = await asyncio.to_thread(_download_audio, url, raw_output)
+        logger.info("[AUDIO] Download completed: %s", downloaded_path)
 
         # Step 2: Convert to WAV
+        logger.info("[AUDIO] Starting FFmpeg conversion to WAV...")
         wav_path = await asyncio.to_thread(_convert_to_wav, downloaded_path, sanitized_id)
+        logger.info("[AUDIO] FFmpeg conversion completed: %s", wav_path)
 
         # Step 3: Get file info
         file_size = os.path.getsize(wav_path)
+        logger.info("[AUDIO] WAV file size: %d bytes", file_size)
 
         # Get duration from the WAV file using ffprobe
         duration = await _get_audio_duration(wav_path)
+        logger.info("[AUDIO] Audio duration: %s seconds", duration)
 
         return AudioInfo(
             video_id=video_id,
@@ -222,6 +228,9 @@ async def download_and_convert_audio(url: str) -> AudioInfo:
             audio_format="wav",
         )
 
+    except Exception as e:
+        logger.exception("[AUDIO] download_and_convert_audio failed: %s", e)
+        raise
     finally:
         # Clean up intermediate downloaded file (keep the WAV)
         _cleanup_file(raw_output)

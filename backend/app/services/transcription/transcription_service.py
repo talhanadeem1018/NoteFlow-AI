@@ -72,48 +72,62 @@ class TranscriptionService:
         """
         try:
             # Step 1: Check for existing transcript
+            logger.info("[TRANSCRIBE] Step 1: Checking for existing transcript...")
             existing = await self._get_existing_transcript(
                 request.url, user_id
             )
             if existing and not request.force_reprocess:
-                logger.info("Returning cached transcript for %s", request.url)
+                logger.info("[TRANSCRIBE] Returning cached transcript for %s", request.url)
                 return existing
+            logger.info("[TRANSCRIBE] No existing transcript found, proceeding...")
 
             # Step 2: Download and convert audio
-            logger.info("Downloading audio for %s", request.url)
+            logger.info("[TRANSCRIBE] Step 2: Downloading audio for %s", request.url)
             audio_info = await download_and_convert_audio(request.url)
+            logger.info("[TRANSCRIBE] Step 2 complete: audio_path=%s, video_id=%s",
+                       audio_info.audio_path, audio_info.video_id)
 
             # Step 3: Transcribe with Whisper
-            logger.info("Starting Whisper transcription for %s", audio_info.audio_path)
+            logger.info("[TRANSCRIBE] Step 3: Starting Whisper transcription for %s", audio_info.audio_path)
             transcription_result = await whisper_service.transcribe(
                 audio_path=audio_info.audio_path,
                 language=request.language,
                 beam_size=request.beam_size,
                 vad_filter=request.vad_filter,
             )
+            logger.info("[TRANSCRIBE] Step 3 complete: %d segments, %.1fs audio",
+                       len(transcription_result.segments), transcription_result.duration)
 
             # Step 4: Store in database
+            logger.info("[TRANSCRIBE] Step 4: Storing transcript in database...")
             transcript = await self._store_transcript(
                 video_url=request.url,
                 video_id=audio_info.video_id,
                 user_id=user_id,
                 result=transcription_result,
             )
+            logger.info("[TRANSCRIBE] Step 4 complete: transcript_id=%s", transcript.id)
 
             # Step 5: Clean up audio file
+            logger.info("[TRANSCRIBE] Step 5: Cleaning up audio file...")
             cleanup_audio_file(audio_info.video_id)
 
             # Step 6: Build and return response
-            return self._build_response(transcript)
+            logger.info("[TRANSCRIBE] Step 6: Building final response...")
+            response = self._build_response(transcript)
+            logger.info("[TRANSCRIBE] Pipeline complete, returning response")
+            return response
 
         except (InvalidURLError, VideoNotFoundError):
+            logger.exception("[TRANSCRIBE] URL/video error")
             raise
         except AudioDownloadError as e:
+            logger.exception("[TRANSCRIBE] Audio download error: %s", e.detail)
             raise TranscriptionError(
                 f"Failed to download audio: {e.detail}"
             ) from e
         except Exception as e:
-            logger.error("Transcription pipeline failed: %s", e)
+            logger.exception("[TRANSCRIBE] Pipeline failed with exception")
             raise TranscriptionError(
                 f"Transcription failed: {str(e)}"
             ) from e
@@ -305,7 +319,7 @@ class TranscriptionService:
         )
 
         self.db.add(transcript)
-        await self.db.flush()
+        await self.db.commit()
         await self.db.refresh(transcript)
 
         logger.info(

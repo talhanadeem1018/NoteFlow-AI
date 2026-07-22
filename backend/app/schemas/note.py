@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.schemas.base import BaseSchema
 
@@ -35,9 +35,10 @@ class NoteUpdate(BaseSchema):
     note_type: str | None = None
 
 
+
 class NoteRead(BaseSchema):
     """Response schema for a single note.
-    
+
     Includes both manual and AI-generated note fields.
     AI-specific fields are populated only for AI-generated notes.
     """
@@ -46,25 +47,46 @@ class NoteRead(BaseSchema):
     user_id: uuid.UUID
     video_id: str | None = None
     title: str
-    content: str
+    content: str = Field(default="")
     note_type: str
     ai_provider: str | None = None
-    
+
     # ── AI-Generated Note Fields (populated when note_type == "ai_notes")
     transcript_id: uuid.UUID | None = None
-    executive_summary: str | None = None
-    key_concepts: list[str] | None = None
-    detailed_notes: str | None = None
-    bullet_points: list[str] | None = None
-    keywords: list[str] | None = None
-    action_items: list[str] | None = None
-    conclusion: str | None = None
+    executive_summary: str = Field(default="")
+    key_concepts: list[str] = Field(default_factory=list)
+    detailed_notes: str = Field(default="")
+    bullet_points: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    action_items: list[str] = Field(default_factory=list)
+    conclusion: str = Field(default="")
     model_used: str | None = None
     prompt_version: str | None = None
-    processing_time: float | None = None
-    
+    processing_time: float = Field(default=0.0)
+
     created_at: datetime
     updated_at: datetime
+
+    # ── Validators to ensure null -> empty values ────────────────
+    @field_validator("key_concepts", "bullet_points", "keywords", "action_items", mode="before")
+    @classmethod
+    def ensure_list(cls, v):
+        return v if isinstance(v, list) else []
+
+    @field_validator("executive_summary", "detailed_notes", "conclusion", mode="before")
+    @classmethod
+    def ensure_string(cls, v):
+        return v or ""
+
+    @field_validator("processing_time", mode="before")
+    @classmethod
+    def ensure_float(cls, v):
+        return v if v is not None else 0.0
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def ensure_content_string(cls, v):
+        return v or ""
 
 
 class NoteListResponse(BaseSchema):
