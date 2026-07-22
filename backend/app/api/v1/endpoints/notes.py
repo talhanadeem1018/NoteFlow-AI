@@ -7,6 +7,7 @@ Endpoints:
 - DELETE /api/v1/notes/{id}      → Delete a note
 """
 
+import time
 import uuid
 import logging
 
@@ -71,9 +72,13 @@ async def generate_notes(
         AppError,
     )
 
+    logger.info("[TIMING] Step 1: Receive request — transcript_id=%s", body.transcript_id)
+    step_start = time.time()
+
     generator = NotesGeneratorService(db)
     try:
         response = await generator.generate_notes(body, user.id)
+        logger.info("[TIMING] Step 8: Return response — total_elapsed=%.2fs", time.time() - step_start)
         return response
     except AppError as e:
         raise HTTPException(
@@ -92,6 +97,9 @@ async def generate_notes(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate notes: {str(e)}",
         )
+    finally:
+        # Ensure the OpenRouter HTTP client is closed to free connections
+        await generator.ai_service.close()
 
 
 # ── CRUD Endpoints (work for both manual and AI notes) ───────────

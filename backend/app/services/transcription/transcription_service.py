@@ -287,7 +287,21 @@ class TranscriptionService:
 
         Returns:
             Stored Transcript model instance.
+
+        Raises:
+            RuntimeError: If the transcription result is empty.
         """
+        # Guard against saving empty transcripts
+        if not result.text.strip():
+            error_msg = (
+                f"Refusing to save empty transcript for video {video_id}. "
+                f"language={result.language} (prob={result.language_probability:.2%}), "
+                f"duration={result.duration:.1f}s, "
+                f"segments={len(result.segments)}"
+            )
+            logger.error("[TRANSCRIBE] %s", error_msg)
+            raise RuntimeError(error_msg)
+
         # Build segments JSON as a list
         segments_data = [
             {

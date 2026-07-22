@@ -5,6 +5,7 @@ of AI client interactions and handling common patterns.
 """
 
 import logging
+import time
 from typing import Any
 
 from app.core.config import settings
@@ -62,15 +63,18 @@ class AIService:
         Raises:
             AIProviderError: AI generation failed.
         """
+        t0 = time.time()
         logger.info("[AI] Building prompt messages (text length=%d chars)...", len(transcript_text))
         # Build messages
         messages = self.prompt_builder.build_messages(
             transcript_text=transcript_text,
             custom_instructions=custom_instructions,
         )
-        logger.info("[AI] Messages built: %d messages, model=%s", len(messages), model or "default")
+        logger.info("[TIMING] Step 3: Build LLM prompt — elapsed=%.2fs, messages=%d",
+                    time.time() - t0, len(messages))
 
         # Generate completion with JSON response
+        t1 = time.time()
         logger.info("[AI] Calling client.generate_json...")
         result = await self.client.generate_json(
             messages=messages,
@@ -78,8 +82,8 @@ class AIService:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        logger.info("[AI] Client returned: model=%s, time=%.2fs",
-                   result.get("model"), result.get("processing_time", 0))
+        logger.info("[TIMING] Steps 4-6: Call LLM + Receive + Parse — elapsed=%.2fs",
+                    time.time() - t1)
 
         # Validate response structure
         if not self.prompt_builder.validate_response(result["data"]):

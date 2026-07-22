@@ -5,7 +5,9 @@ with support for CPU/GPU execution, language detection, and segment generation.
 """
 
 import logging
+import os
 import time
+import wave
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -134,10 +136,9 @@ class WhisperService:
 
         Raises:
             FileNotFoundError: If audio file doesn't exist.
-            RuntimeError: If transcription fails.
+            RuntimeError: If transcription fails or produces empty transcript.
         """
         import asyncio
-        import os
 
         # Validate audio file exists
         if not os.path.exists(audio_path):
@@ -149,73 +150,179 @@ class WhisperService:
         effective_language = language or settings.WHISPER_LANGUAGE
 
         logger.info(
-            "[WHISPER] Starting transcription: %s (language=%s, beam_size=%d)",
+            "[WHISPER] Starting transcription: %s (language=%s, beam_size=%d, vad_filter=%s)",
             audio_path,
             effective_language or "auto",
             effective_beam_size,
+            effective_vad_filter,
         )
         start_time = time.time()
 
-        def _run_transcription() -> tuple[Any, Any]:
-            """Synchronous transcription call (runs in thread)."""
-            logger.info("[WHISPER] _run_transcription: ensuring model...")
+        def _run_with_retry() -> TranscriptionResult:
+            """Synchronous transcription call (runs entirely in thread pool).
+
+            Consumes the segments generator INSIDE the thread to prevent
+            blocking the async event loop during beam search decoding.
+
+            Automatically retries with fallback parameters if the
+            initial transcription produces an empty result:
+            - Retry 1: Disable VAD filter (if it was enabled)
+            - Retry 2: Auto-detect language (if a language hint was given)
+            """
+            logger.info("[WHISPER] _run_with_retry: ensuring model...")
             model = self._ensure_model()
-            logger.info("[WHISPER] _run_transcription: calling model.transcribe()...")
-            result = model.transcribe(
-                audio_path,
-                language=effective_language,
-                beam_size=effective_beam_size,
-                vad_filter=effective_vad_filter,
-                word_timestamps=True,
+
+            # ── Audio file validation ───────────────────────────────────
+            audio_exists = os.path.exists(audio_path)
+            audio_size = os.path.getsize(audio_path) if audio_exists else 0
+            logger.info(
+                "[WHISPER] Audio file check: path=%s, exists=%s, size=%d bytes",
+                audio_path, audio_exists, audio_size,
             )
-            logger.info("[WHISPER] _run_transcription: model.transcribe() returned")
-            return result
+
+            audio_duration_sec = 0.0
+            audio_sample_rate = 0
+            audio_channels = 0
+            try:
+                with wave.open(audio_path, 'rb') as wf:
+                    audio_sample_rate = wf.getframerate()
+                    audio_channels = wf.getnchannels()
+                    audio_frames = wf.getnframes()
+                    audio_duration_sec = audio_frames / audio_sample_rate if audio_sample_rate > 0 else 0.0
+                logger.info(
+                    "[WHISPER] WAV validation: sample_rate=%d Hz, channels=%d, frames=%d, duration=%.2fs",
+                    audio_sample_rate, audio_channels, audio_frames, audio_duration_sec,
+                )
+            except Exception as wav_err:
+                logger.warning("[WHISPER] Failed to read WAV headers: %s", wav_err)
+
+            # ── Build retry parameter combinations ──────────────────────
+            # Try progressively more lenient settings if output is empty.
+            retry_params: list[tuple[bool, str | None]] = []
+            retry_params.append((effective_vad_filter, effective_language))
+            if effective_vad_filter:
+                retry_params.append((False, effective_language))
+            if effective_language is not None:
+                retry_params.append((effective_vad_filter, None))
+            if effective_vad_filter and effective_language is not None:
+                retry_params.append((False, None))
+
+            # Deduplicate while preserving order
+            seen_params: set[tuple[bool, str | None]] = set()
+            unique_params: list[tuple[bool, str | None]] = []
+            for p in retry_params:
+                if p not in seen_params:
+                    seen_params.add(p)
+                    unique_params.append(p)
+
+            last_info = None
+
+            for attempt, (current_vad, current_lang) in enumerate(unique_params, 1):
+                if attempt > 1:
+                    logger.info(
+                        "[WHISPER] Retry attempt %d/%d: vad_filter=%s, language=%s",
+                        attempt, len(unique_params), current_vad, current_lang or "auto",
+                    )
+
+                logger.info(
+                    "[WHISPER] Calling model.transcribe() (attempt %d/%d): vad_filter=%s, language=%s, beam_size=%d",
+                    attempt, len(unique_params),
+                    current_vad, current_lang or "auto", effective_beam_size,
+                )
+
+                segments_generator, info = model.transcribe(
+                    audio_path,
+                    language=current_lang,
+                    beam_size=effective_beam_size,
+                    vad_filter=current_vad,
+                    word_timestamps=True,
+                )
+                last_info = info
+
+                logger.info(
+                    "[WHISPER] model.transcribe() returned: language=%s, language_probability=%.4f, duration=%.2fs",
+                    info.language, info.language_probability, info.duration,
+                )
+
+                # Consume the generator INSIDE the thread
+                segments: list[TranscriptionSegment] = []
+                full_text_parts: list[str] = []
+
+                for i, segment in enumerate(segments_generator):
+                    seg = TranscriptionSegment(
+                        id=i,
+                        start=segment.start,
+                        end=segment.end,
+                        text=segment.text.strip(),
+                        avg_logprob=getattr(segment, "avg_logprob", None),
+                        no_speech_prob=getattr(segment, "no_speech_prob", None),
+                        compression_ratio=getattr(segment, "compression_ratio", None),
+                    )
+                    segments.append(seg)
+                    full_text_parts.append(seg.text)
+
+                processing_time = time.time() - start_time
+                full_text = " ".join(full_text_parts)
+
+                logger.info(
+                    "[WHISPER] Attempt %d result: %d segments, full_text_length=%d chars, processing_time=%.2fs",
+                    attempt, len(segments), len(full_text), processing_time,
+                )
+
+                if len(segments) > 0 and full_text.strip():
+                    logger.info(
+                        "[WHISPER] Attempt %d succeeded: %.1fs audio in %.2fs, "
+                        "language=%s (%.2f%%), %d segments",
+                        attempt, info.duration, processing_time,
+                        info.language, info.language_probability * 100,
+                        len(segments),
+                    )
+                    return TranscriptionResult(
+                        text=full_text,
+                        language=info.language,
+                        language_probability=info.language_probability,
+                        duration=info.duration,
+                        segments=segments,
+                        processing_time=processing_time,
+                    )
+
+                logger.warning(
+                    "[WHISPER] Attempt %d produced empty output! "
+                    "language=%s (prob=%.4f), duration=%.2fs, "
+                    "vad_filter=%s, language_param=%s",
+                    attempt,
+                    info.language, info.language_probability,
+                    info.duration, current_vad, current_lang or "auto",
+                )
+
+            # ── All retries exhausted, raise descriptive error ──────────
+            processing_time = time.time() - start_time
+            error_msg = (
+                f"Whisper produced an empty transcript after {len(unique_params)} attempt(s). "
+                f"audio_path={audio_path}, "
+                f"audio_size={audio_size} bytes, "
+                f"audio_duration={audio_duration_sec:.1f}s (wave), "
+                f"whisper_duration={last_info.duration:.1f}s (model), "
+                f"language={last_info.language} (prob={last_info.language_probability:.2%}), "
+                f"vad_filter={effective_vad_filter}, "
+                f"language_hint={effective_language}"
+            )
+            logger.error("[WHISPER] %s", error_msg)
+            raise RuntimeError(error_msg)
 
         try:
-            # Run CPU-bound transcription in thread pool
+            # Run the ENTIRE transcription (model + generator consumption) in the thread pool
             logger.info("[WHISPER] Running transcription in thread pool...")
-            segments_generator, info = await asyncio.to_thread(_run_transcription)
-            logger.info("[WHISPER] Thread returned, consuming segments generator...")
-
-            # Collect segments (generator must be consumed)
-            segments = []
-            full_text_parts = []
-
-            for i, segment in enumerate(segments_generator):
-                seg = TranscriptionSegment(
-                    id=i,
-                    start=segment.start,
-                    end=segment.end,
-                    text=segment.text.strip(),
-                    avg_logprob=getattr(segment, "avg_logprob", None),
-                    no_speech_prob=getattr(segment, "no_speech_prob", None),
-                    compression_ratio=getattr(segment, "compression_ratio", None),
-                )
-                segments.append(seg)
-                full_text_parts.append(seg.text)
-
-            processing_time = time.time() - start_time
-            full_text = " ".join(full_text_parts)
-
-            result = TranscriptionResult(
-                text=full_text,
-                language=info.language,
-                language_probability=info.language_probability,
-                duration=info.duration,
-                segments=segments,
-                processing_time=processing_time,
-            )
-
+            result = await asyncio.to_thread(_run_with_retry)
             logger.info(
                 "[WHISPER] Complete: %.1fs audio in %.2fs processing time, "
                 "language=%s (%.2f%% confidence), %d segments",
-                info.duration,
-                processing_time,
-                info.language,
-                info.language_probability * 100,
-                len(segments),
+                result.duration,
+                result.processing_time,
+                result.language,
+                result.language_probability * 100,
+                len(result.segments),
             )
-
             return result
 
         except Exception as e:

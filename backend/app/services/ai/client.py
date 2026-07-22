@@ -110,6 +110,8 @@ class AIClient:
             logger.info("[AI_CLIENT] Payload size: %d messages, max_tokens=%d",
                        len(payload.get("messages", [])), max_tokens)
             response = await self._client.post("/chat/completions", json=payload)
+            logger.info("[TIMING] Step 5: Receive LLM response — elapsed=%.2fs",
+                        time.time() - start_time)
             response.raise_for_status()
 
             data = response.json()
@@ -209,7 +211,9 @@ class AIClient:
         )
 
         try:
+            t0 = time.time()
             parsed = json.loads(result["content"])
+            logger.info("[TIMING] Step 6: Parse JSON response — elapsed=%.2fs", time.time() - t0)
             return {
                 "data": parsed,
                 "model": result["model"],

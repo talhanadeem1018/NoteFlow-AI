@@ -93,10 +93,12 @@ class NotesGeneratorService:
             raise AppError("Invalid transcript ID format", status_code=400)
 
         # Step 1: Validate transcript exists and is owned by user
+        t0 = time.time()
         logger.info("[NOTES] Step 1: Validating transcript (id=%s)", transcript_uuid)
         transcript = await self._validate_transcript(transcript_uuid, user_uuid)
-        logger.info("[NOTES] Step 1 complete: transcript found, length=%d chars",
-                   len(transcript.full_text) if transcript.full_text else 0)
+        logger.info("[TIMING] Step 2: Load transcript from database — elapsed=%.2fs, length=%d chars",
+                    time.time() - t0,
+                    len(transcript.full_text) if transcript.full_text else 0)
 
         # Step 2: Check for cached notes (unless force_regenerate)
         if not request.force_regenerate:
@@ -134,6 +136,7 @@ class NotesGeneratorService:
         logger.info("[NOTES] Step 3 complete: AI result received")
 
         # Step 4: Store notes in database
+        t0 = time.time()
         logger.info("[NOTES] Step 4: Storing notes in database...")
         note = await self._store_notes(
             transcript_id=transcript_uuid,
@@ -141,14 +144,15 @@ class NotesGeneratorService:
             transcript=transcript,
             ai_result=ai_result,
         )
-        logger.info("[NOTES] Step 4 complete: note_id=%s", note.id)
+        logger.info("[TIMING] Step 7: Save note to database — elapsed=%.2fs, note_id=%s",
+                    time.time() - t0, note.id)
 
         # Step 5: Build and return response
         processing_time = time.time() - start_time
         logger.info(
-            "[NOTES] Step 5: Complete - note_id=%s, total_time=%.2fs",
-            note.id,
+            "[TIMING] Step 8: Return response — elapsed=%.2fs, note_id=%s",
             processing_time,
+            note.id,
         )
 
         return self._build_response(note, processing_time)
