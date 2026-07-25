@@ -157,7 +157,7 @@ export function NotesPage() {
               </button>
             </div>
             <div className="p-6">
-              <AINoteCard note={selectedNote} showFullContent />
+              <AINoteCard note={selectedNote} showFullContent showExportButtons />
             </div>
           </div>
         </div>

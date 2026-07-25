@@ -1,0 +1,23 @@
+Collecting fpdf2
+  Downloading fpdf2-2.8.7-py3-none-any.whl.metadata (81 kB)
+Collecting python-docx
+  Downloading python_docx-1.2.0-py3-none-any.whl.metadata (2.0 kB)
+Collecting defusedxml (from fpdf2)
+  Using cached defusedxml-0.7.1-py2.py3-none-any.whl.metadata (32 kB)
+Collecting Pillow!=9.2.*,>=8.3.2 (from fpdf2)
+  Using cached pillow-12.3.0-cp314-cp314-win_amd64.whl.metadata (9.3 kB)
+Collecting fonttools>=4.34.0 (from fpdf2)
+  Using cached fonttools-4.63.0-cp314-cp314-win_amd64.whl.metadata (121 kB)
+Collecting lxml>=3.1.0 (from python-docx)
+  Downloading lxml-6.1.1-cp314-cp314-win_amd64.whl.metadata (3.6 kB)
+Requirement already satisfied: typing_extensions>=4.9.0 in C:\Users\HP\AppData\Local\Programs\Python\Python314\Lib\site-packages (from python-docx) (4.16.0)
+Downloading fpdf2-2.8.7-py3-none-any.whl (327 kB)
+Downloading python_docx-1.2.0-py3-none-any.whl (252 kB)
+Using cached fonttools-4.63.0-cp314-cp314-win_amd64.whl (2.3 MB)
+Downloading lxml-6.1.1-cp314-cp314-win_amd64.whl (4.1 MB)
+   ---------------------------------------- 4.1/4.1 MB 2.1 MB/s  0:00:01
+Using cached pillow-12.3.0-cp314-cp314-win_amd64.whl (7.2 MB)
+Using cached defusedxml-0.7.1-py2.py3-none-any.whl (25 kB)
+Installing collected packages: Pillow, lxml, fonttools, defusedxml, python-docx, fpdf2
+
+Successfully installed Pillow-12.3.0 defusedxml-0.7.1 fonttools-4.63.0 fpdf2-2.8.7 lxml-6.1.1 python-docx-1.2.0

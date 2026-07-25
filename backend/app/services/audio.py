@@ -59,70 +59,131 @@ def _validate_ffmpeg() -> None:
             )
 
 
+def _is_browser_cookie_error(error_message: str) -> bool:
+    """Return True when yt-dlp could not load cookies from the browser."""
+    normalized = error_message.lower()
+    return any(
+        token in normalized
+        for token in (
+            "cookiesfrombrowser",
+            "cookies from browser",
+            "browser cookie",
+            "cookie file",
+            "no browser",
+            "unable to find browser",
+            "could not find browser",
+            "parse_browser_specification",
+            "browser specification",
+        )
+    )
+
+
+def _is_retryable_download_error(error_message: str) -> bool:
+    """Return True for transient yt-dlp failures that are safe to retry."""
+    normalized = error_message.lower()
+    if any(token in normalized for token in ("private", "unavailable", "deleted", "not found")):
+        return False
+    if "sign in to confirm you're not a bot" in normalized or "captcha" in normalized:
+        return True
+    return any(
+        token in normalized
+        for token in (
+            "http error 429",
+            "too many requests",
+            "rate limit",
+            "timed out",
+            "timeout",
+            "temporarily unavailable",
+            "temporary",
+            "connection",
+            "network",
+            "socket",
+            "ssl",
+            "unable to download webpage",
+        )
+    )
+
+
+def _get_download_error_message(error_message: str) -> str:
+    """Convert yt-dlp output into a clearer user-facing error message."""
+    normalized = error_message.lower()
+    if "sign in to confirm you're not a bot" in normalized or "captcha" in normalized:
+        return (
+            "YouTube blocked the download with an anti-bot verification challenge. "
+            "Please try again later or ensure browser cookies are available."
+        )
+    if any(token in normalized for token in ("private", "unavailable", "deleted", "not found")):
+        return "Video is private, deleted, or unavailable."
+    if any(token in normalized for token in ("http error 429", "too many requests", "rate limit")):
+        return "YouTube temporarily rate-limited the download. Please try again shortly."
+    return "The audio download failed. Please try again later."
+
+
 def _download_audio(url: str, output_path: str) -> str:
     """Download audio-only using yt-dlp. Returns the path of the downloaded file."""
-    ydl_opts: dict[str, Any] = {
-        "format": "bestaudio/best",
-        "outtmpl": output_path,
-        "quiet": True,
-        "no_warnings": True,
-        "socket_timeout": 30,
-        "retries": 3,
-    }
+    max_attempts = 3
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            
-            print("=" * 60)
-            print("PREPARE_FILENAME:", filename)
-            print("EXISTS:", os.path.exists(filename))
-            print("=" * 60)
-            
-            print("=" * 60)
-            print("INFO EXT:", info.get("ext"))
-            print("REQUESTED OUTPUT:", output_path)
+    for attempt in range(max_attempts):
+        use_browser_cookies = os.getenv("YTDLP_USE_BROWSER_COOKIES", "").lower() in {"1", "true", "yes", "on"}
+        ydl_opts: dict[str, Any] = {
+            "format": "bestaudio/best",
+            "outtmpl": output_path,
+            "quiet": True,
+            "no_warnings": True,
+            "socket_timeout": 30,
+            "retries": 0,
+        }
+        if use_browser_cookies:
+            ydl_opts["cookiesfrombrowser"] = ["chrome", "firefox", "edge", "brave", "opera"]
 
-            folder = Path(output_path).parent
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
 
-            print("FILES IN TEMP DIRECTORY:")
-            for f in folder.iterdir():
-                print(" -", f.name)
+                if info is None:
+                    raise AudioDownloadError("No info returned from yt-dlp")
 
-            print("=" * 60)
-    
-            if info is None:
-                raise AudioDownloadError("No info returned from yt-dlp")
-    
-            folder = Path(output_path).parent
-            base = Path(output_path).name
+                folder = Path(output_path).parent
+                base = Path(output_path).name
+                matches = list(folder.glob(base + "*"))
 
-            matches = list(folder.glob(base + "*"))
+                if not matches:
+                    raise AudioDownloadError("Downloaded audio file not found.")
 
-            print("FOUND FILES:", matches)
+                return str(matches[0])
 
-            if not matches:
-                raise AudioDownloadError("Downloaded audio file not found.")
+        except yt_dlp.utils.DownloadError as e:
+            error_text = str(e)
+            error_msg = error_text.lower()
 
-            actual_path = str(matches[0])
-                    
-            print("=" * 60)
-            print("Downloaded file:", actual_path)
-            print("Exists:", os.path.exists(actual_path))
-            print("=" * 60)
-    
-            return actual_path
+            if use_browser_cookies and _is_browser_cookie_error(error_text):
+                logger.warning(
+                    "[AUDIO] Browser cookies unavailable for yt-dlp; falling back to standard download logic"
+                )
+                continue
 
-    except yt_dlp.utils.DownloadError as e:
-        error_msg = str(e).lower()
-        if "private" in error_msg or "unavailable" in error_msg:
-            raise VideoNotFoundError(
-                f"Video is private, deleted, or unavailable: {e}"
-            ) from e
-        raise AudioDownloadError(f"yt-dlp download error: {e}") from e
-    except Exception as e:
-        raise AudioDownloadError(f"Failed to download audio: {e}") from e
+            if _is_retryable_download_error(error_msg) and attempt < max_attempts - 1:
+                wait_seconds = 2**attempt
+                logger.warning(
+                    "[AUDIO] Retry %d/%d for YouTube download after transient error: %s",
+                    attempt + 1,
+                    max_attempts,
+                    error_text,
+                )
+                logger.info("[AUDIO] Waiting %s seconds before retrying", wait_seconds)
+                time.sleep(wait_seconds)
+                continue
+
+            if "private" in error_msg or "unavailable" in error_msg:
+                raise VideoNotFoundError(
+                    f"Video is private, deleted, or unavailable: {e}"
+                ) from e
+
+            raise AudioDownloadError(_get_download_error_message(error_text)) from e
+        except Exception as e:
+            raise AudioDownloadError(f"Failed to download audio: {e}") from e
+
+    raise AudioDownloadError("The audio download failed after multiple attempts.")
 
 
 def _convert_to_wav(input_path: str, video_id: str) -> str:

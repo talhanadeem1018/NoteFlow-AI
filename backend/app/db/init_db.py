@@ -18,6 +18,9 @@ async def create_tables() -> None:
     """
     # Import all models so Base.metadata knows about them
     import app.models.user  # noqa: F401
+    import app.models.transcript  # noqa: F401
+    import app.models.note  # noqa: F401
+    import app.models.processing_job  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

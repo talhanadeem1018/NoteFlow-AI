@@ -36,6 +36,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Startup audio cleanup failed: %s", e)
 
+    # Startup: recover orphaned processing jobs (marked as 'processing' after restart)
+    try:
+        from app.services.processing import recover_orphaned_jobs
+        await recover_orphaned_jobs()
+    except Exception as e:
+        logger.warning("Startup orphan job recovery failed: %s", e)
+
     yield
 
     # Shutdown: cleanup Whisper model resources

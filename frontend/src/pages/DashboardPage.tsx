@@ -117,7 +117,7 @@ export function DashboardPage() {
               <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
                 Just Generated
               </h2>
-              <AINoteCard note={recentNote} showFullContent />
+              <AINoteCard note={recentNote} showFullContent showExportButtons />
             </div>
           )}
 

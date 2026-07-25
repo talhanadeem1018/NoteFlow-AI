@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useVideoMetadata } from "@/services/videos.service";
-import { useStartTranscription } from "@/services/transcription.service";
-import { useGenerateNote } from "@/services/notes.service";
+import { useStartProcessing, useJobStatus } from "@/services/processing.service";
+import { useNote } from "@/services/notes.service";
 import { useToast } from "@/components/ui/Toast";
 import { Button } from "@/components/ui/Button";
 import type { VideoMetadata, AINote } from "@/types";
@@ -10,15 +10,89 @@ interface GenerateWorkflowProps {
   onNoteGenerated: (note: AINote) => void;
 }
 
+/**
+ * GenerateWorkflow – orchestrates the full video → notes pipeline.
+ *
+ * Flow:
+ *   1. Fetch video metadata (fast, synchronous HTTP)
+ *   2. Start background processing (returns job_id immediately)
+ *   3. Poll job status every 5 seconds
+ *   4. When completed → fetch and display generated note
+ *
+ * This eliminates request timeouts for long videos by decoupling
+ * the processing pipeline from the HTTP request lifecycle.
+ */
 export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
   const { addToast } = useToast();
   const [url, setUrl] = useState("");
-  const [step, setStep] = useState<"idle" | "metadata" | "transcribing" | "generating" | "done">("idle");
+  const [step, setStep] = useState<"idle" | "metadata" | "processing" | "done">("idle");
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  // Track whether polling has completed to avoid double-fetching notes
+  const processedNoteRef = useRef<boolean>(false);
 
   const fetchMetadata = useVideoMetadata();
-  const startTranscription = useStartTranscription();
-  const generateNote = useGenerateNote();
+  const startProcessing = useStartProcessing();
+  const jobStatus = useJobStatus(jobId);
+  // Fetch the completed note when job finishes
+  // Note: useNote accepts string, so we use ?? "" to satisfy TypeScript.
+  // The hook's internal `enabled: !!id` guard prevents fetching empty strings.
+  const completedNote = useNote(jobStatus.data?.note_id ?? "");
+
+  // When job completes → the useNote query auto-fetches the note
+  useEffect(() => {
+    if (
+      jobStatus.data?.status === "completed" &&
+      completedNote.data &&
+      !processedNoteRef.current
+    ) {
+      processedNoteRef.current = true;
+      setStep("done");
+      addToast("Notes generated successfully!", "success");
+
+      // Map the NoteRead response to AINote format
+      const note: AINote = {
+        id: completedNote.data.id,
+        transcript_id: completedNote.data.transcript_id,
+        user_id: completedNote.data.user_id,
+        title: completedNote.data.title,
+        executive_summary: completedNote.data.executive_summary,
+        key_concepts: completedNote.data.key_concepts,
+        detailed_notes: completedNote.data.detailed_notes,
+        bullet_points: completedNote.data.bullet_points,
+        keywords: completedNote.data.keywords,
+        action_items: completedNote.data.action_items,
+        conclusion: completedNote.data.conclusion,
+        model_used: completedNote.data.model_used,
+        prompt_version: completedNote.data.prompt_version,
+        processing_time: completedNote.data.processing_time,
+        created_at: completedNote.data.created_at,
+      };
+
+      onNoteGenerated(note);
+
+      // Reset form
+      setUrl("");
+      setMetadata(null);
+      setJobId(null);
+      setStep("idle");
+      processedNoteRef.current = false;
+    }
+  }, [jobStatus.data?.status, completedNote.data, onNoteGenerated, addToast]);
+
+  // When job fails
+  useEffect(() => {
+    if (jobStatus.data?.status === "failed") {
+      const errorMsg = jobStatus.data.error_message || "Processing failed";
+      addToast(errorMsg, "error");
+      setMetadata(null);
+      setJobId(null);
+      setUrl("");
+      setStep("idle");
+      processedNoteRef.current = false;
+    }
+  }, [jobStatus.data?.status, jobStatus.data?.error_message, addToast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +110,10 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
       return;
     }
 
-    // Clear stale metadata from any previous request before starting
+    // Reset state for new processing
     setMetadata(null);
+    setJobId(null);
+    processedNoteRef.current = false;
 
     try {
       // Step 1: Fetch metadata
@@ -48,34 +124,16 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
       setMetadata(metadataResult);
       addToast("Video metadata fetched!", "success");
 
-      // Step 2: Transcribe
-      setStep("transcribing");
-      addToast("Starting transcription...", "info");
+      // Step 2: Start background processing
+      setStep("processing");
+      addToast("Starting background processing...", "info");
 
-      const transcriptionResult = await startTranscription.mutateAsync({ url: trimmed });
-      addToast("Transcription complete!", "success");
-
-      // Step 3: Generate notes
-      setStep("generating");
-      addToast("Generating AI notes...", "info");
-
-      const noteResult = await generateNote.mutateAsync({
-        transcript_id: transcriptionResult.id,
-        force_regenerate: false,
-      });
-
-      setStep("done");
-      addToast("Notes generated successfully!", "success");
-      onNoteGenerated(noteResult);
-
-      // Reset form
-      setUrl("");
-      setMetadata(null);
-      setStep("idle");
+      const jobResult = await startProcessing.mutateAsync({ url: trimmed });
+      setJobId(jobResult.job_id);
+      addToast("Processing started! This may take a few minutes for longer videos.", "info");
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.message || "An error occurred";
       addToast(message, "error");
-      // Reset stale state so the form doesn't show previous video's thumbnail
       setMetadata(null);
       setUrl("");
       setStep("idle");
@@ -114,11 +172,18 @@ export function GenerateWorkflow({ onNoteGenerated }: GenerateWorkflowProps) {
             <div className="flex flex-col">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {step === "metadata" && "Fetching video information..."}
-                {step === "transcribing" && "Transcribing audio..."}
-                {step === "generating" && "Generating AI notes..."}
+                {step === "processing" && (
+                  <>
+                    {jobStatus.data?.progress_message === "Transcribing audio..."
+                      ? "Transcribing audio..."
+                      : jobStatus.data?.progress_message === "Generating AI notes..."
+                        ? "Generating AI notes..."
+                        : "Processing video..."}
+                  </>
+                )}
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                This may take a few minutes for longer videos
+                {step === "processing" && "This may take a few minutes for longer videos. We'll notify you when it's done."}
               </span>
             </div>
           </div>

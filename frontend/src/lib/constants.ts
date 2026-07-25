@@ -10,6 +10,8 @@ export const API_ENDPOINTS = {
     root: "/notes",
     byId: (id: string) => `/notes/${id}`,
     generate: "/notes/generate",
+    exportPdf: (id: string) => `/notes/${id}/export/pdf`,
+    exportDocx: (id: string) => `/notes/${id}/export/docx`,
   },
   videos: {
     root: "/videos",
@@ -29,5 +31,9 @@ export const API_ENDPOINTS = {
     register: "/auth/register",
     logout: "/auth/logout",
     me: "/auth/me",
+  },
+  processing: {
+    start: "/processing/start",
+    byId: (id: string) => `/processing/${id}`,
   },
 } as const;

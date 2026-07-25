@@ -286,6 +286,29 @@ class WhisperService:
                         processing_time=processing_time,
                     )
 
+                # Log segment-level diagnostics to help pinpoint WHY it's empty
+                if len(segments) == 0:
+                    logger.warning(
+                        "[WHISPER] Attempt %d produced 0 segments — model returned zero speech regions.",
+                        attempt,
+                    )
+                else:
+                    # Some segments exist but all text was stripped empty
+                    no_speech_probs = [s.no_speech_prob for s in segments if s.no_speech_prob is not None]
+                    avg_logprobs = [s.avg_logprob for s in segments if s.avg_logprob is not None]
+                    logger.warning(
+                        "[WHISPER] Attempt %d produced %d segment(s) with no readable text. "
+                        "no_speech_prob_range=[%.3f, %.3f] (count=%d), "
+                        "avg_logprob_range=[%.3f, %.3f] (count=%d)",
+                        attempt, len(segments),
+                        min(no_speech_probs) if no_speech_probs else 0,
+                        max(no_speech_probs) if no_speech_probs else 0,
+                        len(no_speech_probs),
+                        min(avg_logprobs) if avg_logprobs else 0,
+                        max(avg_logprobs) if avg_logprobs else 0,
+                        len(avg_logprobs),
+                    )
+
                 logger.warning(
                     "[WHISPER] Attempt %d produced empty output! "
                     "language=%s (prob=%.4f), duration=%.2fs, "
@@ -295,15 +318,82 @@ class WhisperService:
                     info.duration, current_vad, current_lang or "auto",
                 )
 
+            # ── Final fallback: relax Whisper decode thresholds ─────────
+            # If VAD+language retries still fail, the audio may contain speech
+            # that Whisper's no_speech_threshold (0.6) or
+            # compression_ratio_threshold (2.4) is suppressing.
+            logger.warning(
+                "[WHISPER] All %d retry combinations failed. Trying final fallback with "
+                "relaxed thresholds (no_speech_threshold=0.0, "
+                "compression_ratio_threshold=None)...",
+                len(unique_params),
+            )
+            try:
+                segments_generator, info = model.transcribe(
+                    audio_path,
+                    language=None,                # auto-detect
+                    beam_size=effective_beam_size,
+                    vad_filter=False,              # no VAD
+                    word_timestamps=True,
+                    no_speech_threshold=0.0,       # force decode even when uncertain
+                    compression_ratio_threshold=None,  # don't filter by compression
+                )
+                last_info = info
+
+                segments = []
+                full_text_parts = []
+                for i, segment in enumerate(segments_generator):
+                    seg = TranscriptionSegment(
+                        id=i,
+                        start=segment.start,
+                        end=segment.end,
+                        text=segment.text.strip(),
+                        avg_logprob=getattr(segment, "avg_logprob", None),
+                        no_speech_prob=getattr(segment, "no_speech_prob", None),
+                        compression_ratio=getattr(segment, "compression_ratio", None),
+                    )
+                    segments.append(seg)
+                    full_text_parts.append(seg.text)
+
+                processing_time = time.time() - start_time
+                full_text = " ".join(full_text_parts)
+
+                if len(segments) > 0 and full_text.strip():
+                    logger.info(
+                        "[WHISPER] Final fallback succeeded: %.1fs audio in %.2fs, "
+                        "language=%s (%.2f%%), %d segments",
+                        info.duration, processing_time,
+                        info.language, info.language_probability * 100,
+                        len(segments),
+                    )
+                    return TranscriptionResult(
+                        text=full_text,
+                        language=info.language,
+                        language_probability=info.language_probability,
+                        duration=info.duration,
+                        segments=segments,
+                        processing_time=processing_time,
+                    )
+
+                logger.warning(
+                    "[WHISPER] Final fallback also produced empty output. "
+                    "language=%s (prob=%.4f), duration=%.2fs",
+                    info.language, info.language_probability, info.duration,
+                )
+            except Exception as fallback_err:
+                logger.warning("[WHISPER] Final fallback failed: %s", fallback_err)
+
             # ── All retries exhausted, raise descriptive error ──────────
             processing_time = time.time() - start_time
             error_msg = (
-                f"Whisper produced an empty transcript after {len(unique_params)} attempt(s). "
+                f"Whisper produced an empty transcript after {len(unique_params)} attempt(s) "
+                f"+ final fallback. "
                 f"audio_path={audio_path}, "
                 f"audio_size={audio_size} bytes, "
                 f"audio_duration={audio_duration_sec:.1f}s (wave), "
-                f"whisper_duration={last_info.duration:.1f}s (model), "
-                f"language={last_info.language} (prob={last_info.language_probability:.2%}), "
+                f"whisper_duration={(last_info.duration if last_info else 0):.1f}s (model), "
+                f"language={(last_info.language if last_info else 'unknown')} "
+                f"(prob={(last_info.language_probability if last_info else 0):.2%}), "
                 f"vad_filter={effective_vad_filter}, "
                 f"language_hint={effective_language}"
             )

@@ -173,6 +173,34 @@ export interface GenerateNoteRequest {
   customPrompt?: string;
 }
 
+// ─── Processing Job Types ────────────────────────────────────────────
+
+export type ProcessingStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface StartProcessingRequest {
+  url: string;
+  language?: string;
+  force_reprocess?: boolean;
+}
+
+export interface ProcessingJobResponse {
+  job_id: string;
+  status: ProcessingStatus;
+  progress_message: string | null;
+  created_at: string;
+}
+
+export interface ProcessingStatusResponse {
+  job_id: string;
+  status: ProcessingStatus;
+  progress_message: string | null;
+  transcript_id: string | null;
+  note_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
 // ─── Utility Types ────────────────────────────────────────────────────
 
 export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
