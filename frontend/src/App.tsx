@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { GuestRoute } from "@/components/auth/GuestRoute";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 // Lazy-loaded pages for better performance
 const HomePage = lazy(() => import("@/pages/HomePage").then(m => ({ default: m.HomePage })));
@@ -28,6 +29,7 @@ function PageLoader() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Routes>
       <Route element={<Layout />}>
         {/* Public routes */}
@@ -87,5 +89,6 @@ export default function App() {
         } />
       </Route>
     </Routes>
+    </ErrorBoundary>
   );
 }

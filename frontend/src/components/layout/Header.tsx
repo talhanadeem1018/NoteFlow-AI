@@ -28,8 +28,13 @@ function ActiveJobBadge() {
   const location = useLocation();
 
   // Poll job status while activeJob exists (even on other pages)
+  // Only poll from the header when NOT on the dashboard to avoid
+  // duplicating the polling done by GenerateWorkflow's useJobStatus.
   useEffect(() => {
     if (!activeJob) return;
+
+    // Skip polling on dashboard — GenerateWorkflow/useJobStatus handles it
+    if (location.pathname === "/dashboard") return;
 
     const interval = window.setInterval(async () => {
       try {

@@ -193,7 +193,7 @@ export function NoteDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto max-w-4xl animate-fade-in space-y-6">
         <Skeleton className="h-6 w-32" />
         <Skeleton className="h-48 w-full rounded-xl" />
         <div className="space-y-4">
@@ -224,8 +224,6 @@ export function NoteDetailsPage() {
               </svg>
               Back to Notes
             </Link>
-          </div>
-        </main>
       </div>
     );
   }

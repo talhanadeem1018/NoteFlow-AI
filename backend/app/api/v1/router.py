@@ -42,7 +42,3 @@ api_router.include_router(
 # from app.api.v1.endpoints import note_categories
 # api_router.include_router(note_categories.router, prefix="/note-categories", tags=["Note Categories"])
 
-
-@api_router.get("/ping", tags=["Health"])
-async def ping():
-    return {"message": "pong"}

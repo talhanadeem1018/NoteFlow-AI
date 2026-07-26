@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import Float, Integer, JSON, String, Text
+from sqlalchemy import Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +20,7 @@ class Transcript(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

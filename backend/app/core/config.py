@@ -29,8 +29,10 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",  # Vite dev server
         "http://localhost:3000",
-        "https://vercel.app",  # Production (update with your domain)
     ]
+
+    # ── Production domain (set in .env for production deployment) ──
+    PRODUCTION_DOMAIN: str = ""  # e.g., "https://noteflow-ai.vercel.app"
 
     # ── Database (Supabase PostgreSQL) ───────────────────────────
     DATABASE_URL: str = ""  # async pooler URL for FastAPI
@@ -42,7 +44,7 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: str = ""  # service_role key (server only)
 
     # ── JWT ─────────────────────────────────────────────────────
-    JWT_SECRET: str = "change-me-in-production"
+    JWT_SECRET: str = ""  # MUST be set in production - will raise warning if default is used
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_MINUTES: int = 1440  # 24 hours
 

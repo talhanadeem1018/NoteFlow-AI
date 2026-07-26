@@ -25,10 +25,6 @@ interface AppState {
   isLoading: boolean;
   setLoading: (loading: boolean) => void;
 
-  /** Sidebar open state (for future use) */
-  sidebarOpen: boolean;
-  toggleSidebar: () => void;
-
   /** Theme preference */
   theme: "light" | "dark" | "system";
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -40,6 +36,10 @@ interface AppState {
   /** Video metadata for the active job — persisted to restore the processing card */
   pendingJobMetadata: PendingJobMetadata | null;
   setPendingJobMetadata: (meta: PendingJobMetadata | null) => void;
+
+  /** Completed note ID — set when a processing job finishes, used for redirect */
+  completedNoteId: string | null;
+  setCompletedNoteId: (noteId: string | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -47,9 +47,6 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       isLoading: false,
       setLoading: (isLoading) => set({ isLoading }),
-
-      sidebarOpen: false,
-      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
       theme: "system",
       setTheme: (theme) => set({ theme }),
@@ -59,6 +56,9 @@ export const useAppStore = create<AppState>()(
 
       pendingJobMetadata: null,
       setPendingJobMetadata: (pendingJobMetadata) => set({ pendingJobMetadata }),
+
+      completedNoteId: null,
+      setCompletedNoteId: (completedNoteId) => set({ completedNoteId }),
     }),
     {
       name: "noteflow-active-job",

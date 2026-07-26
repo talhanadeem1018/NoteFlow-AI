@@ -71,8 +71,6 @@ export function GenerateWorkflow({ onNoteGenerated, onJobStatusChange }: Generat
   const setActiveJob = useAppStore((s) => s.setActiveJob);
   const pendingJobMetadata = useAppStore((s) => s.pendingJobMetadata);
   const setPendingJobMetadata = useAppStore((s) => s.setPendingJobMetadata);
-  const setCompletedNoteId = useAppStore((s) => s.setCompletedNoteId);
-
   const [url, setUrl] = useState("");
   const [workflowStep, setWorkflowStep] = useState<ProcessingStepId>("queued");
   const [showWorkflow, setShowWorkflow] = useState(false);
