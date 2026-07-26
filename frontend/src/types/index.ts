@@ -26,21 +26,6 @@ export interface User {
   createdAt: string;
 }
 
-// ─── Video Types ──────────────────────────────────────────────────────
-
-export interface Video {
-  id: string;
-  youtubeUrl: string;
-  title: string;
-  description?: string;
-  thumbnailUrl?: string;
-  duration?: number;
-  channelName?: string;
-  publishedAt?: string;
-  transcript?: string;
-  createdAt: string;
-}
-
 /** Metadata extracted from a YouTube video via yt-dlp */
 export interface VideoMetadata {
   video_id: string;
@@ -150,27 +135,6 @@ export interface GenerateAINoteRequest {
   temperature?: number;
   max_tokens?: number;
   custom_instructions?: string;
-}
-
-// ─── Note Types ───────────────────────────────────────────────────────
-
-export type NoteType = "summary" | "notes" | "quiz" | "flashcards";
-
-export interface Note {
-  id: string;
-  videoId: string;
-  type: NoteType;
-  title: string;
-  content: string;
-  aiProvider?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface GenerateNoteRequest {
-  videoUrl: string;
-  type: NoteType;
-  customPrompt?: string;
 }
 
 // ─── Processing Job Types ────────────────────────────────────────────

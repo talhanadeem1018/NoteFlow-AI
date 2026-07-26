@@ -72,19 +72,27 @@ export function ForgotPasswordPage() {
         >
           {/* Server error */}
           {serverError && (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
-              <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                {serverError}
-              </p>
+            <div className="mb-6 animate-slide-down rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950" role="alert">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-red-500" aria-hidden="true">⚠️</span>
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {serverError}
+                </p>
+              </div>
             </div>
           )}
 
           {/* Success message */}
           {successMessage && (
-            <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
-              <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                {successMessage}
-              </p>
+            <div className="mb-6 animate-slide-down rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950" role="status">
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-green-200 text-sm dark:bg-green-800">
+                  <span className="text-green-700 dark:text-green-300">✓</span>
+                </div>
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  {successMessage}
+                </p>
+              </div>
             </div>
           )}
 
@@ -126,7 +134,7 @@ export function ForgotPasswordPage() {
             size="lg"
             loading={isSubmitting}
             disabled={successMessage !== null}
-            className="w-full"
+            fullWidth
           >
             Send Reset Link
           </Button>

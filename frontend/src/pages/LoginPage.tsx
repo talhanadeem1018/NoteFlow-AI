@@ -89,10 +89,10 @@ export function LoginPage() {
       <div className="mx-auto w-full max-w-md">
         {/* Header */}
         <div className="mb-8 text-center">
-          <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="mb-2 text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
             Welcome back
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Sign in to your NoteFlow AI account
           </p>
         </div>
@@ -104,10 +104,13 @@ export function LoginPage() {
         >
           {/* Server error */}
           {serverError && (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
-              <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                {serverError}
-              </p>
+            <div className="mb-6 animate-slide-down rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950" role="alert">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-red-500" aria-hidden="true">⚠️</span>
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {serverError}
+                </p>
+              </div>
             </div>
           )}
 
@@ -177,16 +180,14 @@ export function LoginPage() {
           </div>
 
           {/* Submit */}
-          <div className="mt-6">
-            <Button
-              type="submit"
-              size="lg"
-              loading={isSubmitting}
-              className="w-full"
-            >
-              Sign In
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            size="lg"
+            loading={isSubmitting}
+            fullWidth
+          >
+            Sign In
+          </Button>
 
           {/* Footer link */}
           <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">

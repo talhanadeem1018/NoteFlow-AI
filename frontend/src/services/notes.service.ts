@@ -72,3 +72,32 @@ export function useDeleteNote() {
     },
   });
 }
+
+/**
+ * Bulk delete notes by calling the individual delete API sequentially.
+ * Tracks progress so the UI can show how many have been deleted.
+ */
+export function useBulkDeleteNotes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (noteIds: string[]) => {
+      const results: { id: string; success: boolean; error?: string }[] = [];
+
+      for (const id of noteIds) {
+        try {
+          await api.delete(API_ENDPOINTS.notes.byId(id));
+          results.push({ id, success: true });
+        } catch (err: any) {
+          const msg = err?.response?.data?.detail || err?.message || "Delete failed";
+          results.push({ id, success: false, error: msg });
+        }
+      }
+
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notes"] });
+    },
+  });
+}
