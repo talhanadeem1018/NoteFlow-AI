@@ -68,12 +68,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
-      // Handle SESSION_INITIAL, SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED
+      // Handle SESSION_INITIAL, SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
-      // Only set loading=false on the initial event
-      if (event === "INITIAL_SESSION") {
+      // Set loading=false on initial load or password recovery
+      if (event === "INITIAL_SESSION" || event === "PASSWORD_RECOVERY") {
         setLoading(false);
       }
     });

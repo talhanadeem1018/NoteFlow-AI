@@ -31,9 +31,11 @@ export function ForgotPasswordPage() {
 
     setIsSubmitting(true);
 
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${appUrl}/reset-password`,
       });
 
       if (error) {
