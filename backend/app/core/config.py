@@ -29,10 +29,11 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",  # Vite dev server
         "http://localhost:3000",
+        "https://note-flow-ai-eight.vercel.app",  # Vercel production frontend
     ]
 
     # ── Production domain (set in .env for production deployment) ──
-    PRODUCTION_DOMAIN: str = ""  # e.g., "https://noteflow-ai.vercel.app"
+    PRODUCTION_DOMAIN: str = ""  # e.g., "https://note-flow-ai-eight.vercel.app"
 
     # ── Database (Supabase PostgreSQL) ───────────────────────────
     DATABASE_URL: str = ""  # async pooler URL for FastAPI
