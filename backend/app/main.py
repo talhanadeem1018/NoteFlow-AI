@@ -80,9 +80,16 @@ def create_app() -> FastAPI:
         )
 
     # ── CORS middleware ──────────────────────────────────────────
+    # Build the CORS origins list, ensuring the production frontend URL
+    # is always included regardless of environment variable overrides.
+    PRODUCTION_FRONTEND_URL = "https://note-flow-ai-eight.vercel.app"
+
     cors_origins = list(settings.CORS_ORIGINS)
     if settings.PRODUCTION_DOMAIN:
         cors_origins.append(settings.PRODUCTION_DOMAIN)
+    if PRODUCTION_FRONTEND_URL not in cors_origins:
+        cors_origins.append(PRODUCTION_FRONTEND_URL)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
