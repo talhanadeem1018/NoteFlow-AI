@@ -28,7 +28,7 @@ function thumbnailGradient(title: string): string {
   for (let i = 0; i < title.length; i++) {
     hash = title.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return colors[Math.abs(hash) % colors.length];
+  return colors[Math.abs(hash) % colors.length] ?? "";
 }
 
 export const NoteCard = memo(function NoteCard({
@@ -76,7 +76,7 @@ export const NoteCard = memo(function NoteCard({
     }
   }, [note, addToast]);
 
-  const gradient = thumbnailGradient(note.title);
+  const gradient = thumbnailGradient(note.title ?? "");
 
   return (
     <div

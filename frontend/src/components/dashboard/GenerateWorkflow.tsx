@@ -67,9 +67,7 @@ export function GenerateWorkflow({ onNoteGenerated, onJobStatusChange }: Generat
   const navigate = useNavigate();
   const { addToast } = useToast();
 
-  const activeJob = useAppStore((s) => s.activeJob);
   const setActiveJob = useAppStore((s) => s.setActiveJob);
-  const pendingJobMetadata = useAppStore((s) => s.pendingJobMetadata);
   const setPendingJobMetadata = useAppStore((s) => s.setPendingJobMetadata);
   const [url, setUrl] = useState("");
   const [workflowStep, setWorkflowStep] = useState<ProcessingStepId>("queued");

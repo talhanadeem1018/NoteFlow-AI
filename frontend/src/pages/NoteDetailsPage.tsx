@@ -139,16 +139,6 @@ export function NoteDetailsPage() {
     }
   };
 
-  const handleCopy = async () => {
-    if (!note) return;
-    try {
-      await copyToClipboard(note);
-      addToast("Notes copied to clipboard!", "success");
-    } catch {
-      addToast("Failed to copy to clipboard", "error");
-    }
-  };
-
   const handleDownloadMarkdown = async () => {
     if (!note) return;
     try {
