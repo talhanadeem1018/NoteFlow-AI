@@ -16,40 +16,49 @@ export const api = axios.create({
 
 // Cache the last known session token to avoid redundant supabase.auth.getSession() calls
 let _cachedToken: string | null = null;
-let _tokenPromise: Promise<string | null> | null = null;
 
 // Subscribe to Supabase auth state to keep cached token in sync
 // without relying on AuthContext (which may not be mounted yet)
 supabase.auth.onAuthStateChange((_event, session) => {
   _cachedToken = session?.access_token ?? null;
-  if (!session) {
-    _tokenPromise = null;
-  }
 });
 
 async function getAccessToken(): Promise<string | null> {
   // Return cached token immediately if available
   if (_cachedToken) return _cachedToken;
 
-  // Deduplicate concurrent calls
-  if (!_tokenPromise) {
-    _tokenPromise = supabase.auth.getSession().then(({ data: { session } }) => {
-      const token = session?.access_token ?? null;
-      _cachedToken = token;
-      _tokenPromise = null;
-      return token;
-    });
+  // Fetch fresh session – supabase-js reads from its internal cache / localStorage
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token ?? null;
+    _cachedToken = token;
+    return token;
+  } catch {
+    return null;
   }
-
-  return _tokenPromise;
 }
 
 // Request interceptor – attach auth token when available
 api.interceptors.request.use(async (config) => {
-  const token = await getAccessToken();
+  try {
+    const token = await getAccessToken();
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      // Bracket notation works with both plain objects AND AxiosHeaders instances
+      config.headers["Authorization"] = `Bearer ${token}`;
+    } else if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[api.ts] No access token available – protected requests will receive 401",
+      );
+    }
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn("[api.ts] Failed to attach auth token:", err);
+    }
   }
 
   return config;
@@ -61,7 +70,6 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       _cachedToken = null; // Force re-fetch on next request
-      // AuthContext will handle session restoration / redirect
     }
     return Promise.reject(error);
   },
@@ -70,5 +78,4 @@ api.interceptors.response.use(
 // Allow external code to invalidate the cached token (e.g., after logout)
 export function invalidateCachedToken() {
   _cachedToken = null;
-  _tokenPromise = null;
 }
