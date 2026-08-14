@@ -16,6 +16,48 @@ from app.services.audio import cleanup_stale_audio_files
 logger = logging.getLogger(__name__)
 
 
+def _configure_app_logging() -> None:
+    """Make application pipeline logs visible in the console.
+
+    uvicorn's default logging config leaves the root logger at WARNING and
+    attaches no handler to the app's loggers, so every INFO-level pipeline
+    log (job start, audio download, Whisper invocation, transcription
+    progress, completion) is silently swallowed – a job can look frozen even
+    though Whisper is decoding at 100% CPU. We attach our own handler to the
+    relevant loggers with propagate=False so uvicorn cannot suppress them,
+    and mirror settings.DEBUG into the log level.
+    """
+    level = logging.DEBUG if settings.DEBUG else logging.INFO
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+
+    # 'app' covers every module under app/ (services, api, etc.) via
+    # logger propagation; 'faster_whisper' emits decode-stage INFO logs.
+    for logger_name in ("app", "faster_whisper"):
+        lg = logging.getLogger(logger_name)
+        lg.setLevel(level)
+        lg.handlers[:] = [handler]
+        lg.propagate = False
+
+    # Keep noisy HTTP client logs (e.g. HuggingFace revision checks during
+    # model load) out of the way; WARNING and above still surfaces.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    if settings.DEBUG:
+        # engine.echo=True emits per-statement SQL through this logger.
+        sql_logger = logging.getLogger("sqlalchemy.engine")
+        sql_logger.setLevel(logging.INFO)
+        sql_logger.handlers[:] = [handler]
+        sql_logger.propagate = False
+
+
+_configure_app_logging()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan – startup and shutdown events."""

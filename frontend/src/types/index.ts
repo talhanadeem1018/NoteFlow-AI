@@ -139,7 +139,22 @@ export interface GenerateAINoteRequest {
 
 // ─── Processing Job Types ────────────────────────────────────────────
 
-export type ProcessingStatus = "pending" | "processing" | "completed" | "failed";
+export type ProcessingStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "paused"
+  | "cancelled"
+  | "interrupted";
+
+/** Persisted pipeline checkpoint – used to resume without redoing stages */
+export type ProcessingStage =
+  | "metadata"
+  | "downloading"
+  | "transcribing"
+  | "generating_notes"
+  | "completed";
 
 export interface StartProcessingRequest {
   url: string;
@@ -157,10 +172,15 @@ export interface ProcessingJobResponse {
 export interface ProcessingStatusResponse {
   job_id: string;
   status: ProcessingStatus;
+  current_stage: ProcessingStage | null;
+  progress: number;
   progress_message: string | null;
   transcript_id: string | null;
   note_id: string | null;
   error_message: string | null;
+  paused_at: string | null;
+  cancelled_at: string | null;
+  interrupted_at: string | null;
   created_at: string;
   completed_at: string | null;
 }

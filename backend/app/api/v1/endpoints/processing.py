@@ -4,9 +4,12 @@ These endpoints replace the synchronous transcription → notes pipeline with
 an async background job model to eliminate request timeouts for long videos.
 
 Flow:
-  1. POST /processing/start  → Creates a job, returns job_id immediately
-  2. GET  /processing/{id}   → Poll for status (pending|processing|completed|failed)
-  3. GET  /notes/{id}        → (Existing endpoint) Fetch generated notes when done
+  1. POST /processing/start           → Creates a job, returns job_id immediately
+  2. GET  /processing/{id}            → Poll for status (pending|processing|completed|failed|paused|cancelled|interrupted)
+  3. POST /processing/{id}/pause      → Pause a running job (resumable)
+  4. POST /processing/{id}/resume     → Resume a paused/interrupted job from its checkpoint
+  5. POST /processing/{id}/cancel     → Cancel a job and discard its progress
+  6. GET  /notes/{id}                 → (Existing endpoint) Fetch generated notes when done
 """
 
 import logging
@@ -37,7 +40,9 @@ router = APIRouter()
         "Returns immediately with a job ID. "
         "The backend will download audio, transcribe with Whisper, "
         "and generate AI notes asynchronously. "
-        "Poll GET /processing/{id} for status updates."
+        "Poll GET /processing/{id} for status updates. "
+        "If a paused/interrupted job already exists for the same URL, "
+        "it is returned instead of creating a duplicate."
     ),
     responses={
         401: {"description": "Authentication required"},
@@ -87,8 +92,9 @@ async def start_processing(
     summary="Get processing job status",
     description=(
         "Poll this endpoint to check the status of a background processing job. "
-        "Returns the current status (pending|processing|completed|failed), "
-        "progress message, and result IDs when available."
+        "Returns the current status (pending|processing|completed|failed|"
+        "paused|cancelled|interrupted), progress message, and result IDs "
+        "when available."
     ),
     responses={
         401: {"description": "Authentication required"},
@@ -118,3 +124,105 @@ async def get_job_status(
         )
 
     return status_response
+
+
+@router.post(
+    "/{job_id}/pause",
+    response_model=ProcessingStatusResponse,
+    summary="Pause a processing job",
+    description=(
+        "Pause a running (or queued) processing job. The current progress "
+        "and checkpoint are preserved, and the job can be resumed later "
+        "via POST /processing/{id}/resume. Idempotent – pausing an already "
+        "paused job returns its current status."
+    ),
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Job not found"},
+    },
+)
+async def pause_processing(
+    job_id: str,
+    user: AuthUser = Depends(get_current_user),
+) -> ProcessingStatusResponse:
+    """Pause a running processing job."""
+    from app.services.processing import pause_job
+
+    response = await pause_job(job_id, user.id)
+
+    if response is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Processing job not found",
+        )
+
+    logger.info("[PROCESSING] Job %s paused (user=%s)", job_id, user.id)
+    return response
+
+
+@router.post(
+    "/{job_id}/resume",
+    response_model=ProcessingStatusResponse,
+    summary="Resume a paused/interrupted processing job",
+    description=(
+        "Resume a paused, interrupted, or failed processing job. "
+        "Continues the SAME job from its last persisted checkpoint – "
+        "completed stages (download/transcription/notes) are never re-run. "
+        "Idempotent – resuming an already-running job is a no-op."
+    ),
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Job not found"},
+    },
+)
+async def resume_processing(
+    job_id: str,
+    user: AuthUser = Depends(get_current_user),
+) -> ProcessingStatusResponse:
+    """Resume a paused/interrupted processing job from its checkpoint."""
+    from app.services.processing import resume_job
+
+    response = await resume_job(job_id, user.id)
+
+    if response is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Processing job not found",
+        )
+
+    logger.info("[PROCESSING] Job %s resumed (user=%s)", job_id, user.id)
+    return response
+
+
+@router.post(
+    "/{job_id}/cancel",
+    response_model=ProcessingStatusResponse,
+    summary="Cancel a processing job",
+    description=(
+        "Cancel a processing job and discard its progress. The background "
+        "task is stopped and temporary files are cleaned up. The user can "
+        "start a completely new job afterwards. Idempotent – cancelling an "
+        "already cancelled job returns its current status."
+    ),
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Job not found"},
+    },
+)
+async def cancel_processing(
+    job_id: str,
+    user: AuthUser = Depends(get_current_user),
+) -> ProcessingStatusResponse:
+    """Cancel a processing job and discard its progress."""
+    from app.services.processing import cancel_job
+
+    response = await cancel_job(job_id, user.id)
+
+    if response is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Processing job not found",
+        )
+
+    logger.info("[PROCESSING] Job %s cancelled (user=%s)", job_id, user.id)
+    return response

@@ -238,6 +238,7 @@ async def download_and_convert_audio(url: str) -> AudioInfo:
     Download audio from YouTube and convert to Whisper-compatible WAV.
 
     Flow:
+        0. Reuse an existing cached WAV for this video ID (if present)
         1. Validate URL and extract video ID
         2. Download best audio using yt-dlp (to temp dir)
         3. Convert to WAV 16kHz mono using FFmpeg
@@ -255,6 +256,18 @@ async def download_and_convert_audio(url: str) -> AudioInfo:
 
     # Sanitize video_id early for security
     sanitized_id = _sanitize_video_id(video_id)
+
+    # Step 0: Reuse cached WAV if present (download checkpoint)
+    cached = get_cached_audio_path(sanitized_id)
+    if cached is not None:
+        logger.info("[AUDIO] Cached WAV found for %s, skipping download/conversion", video_id)
+        return AudioInfo(
+            video_id=video_id,
+            audio_path=cached,
+            duration=await _get_audio_duration(cached),
+            file_size=os.path.getsize(cached),
+            audio_format="wav",
+        )
 
     # Ensure FFmpeg is available
     await asyncio.to_thread(_validate_ffmpeg)
@@ -321,6 +334,28 @@ async def _get_audio_duration(wav_path: str) -> int | None:
             logger.warning("ffprobe failed for %s: %s", wav_path, result.stderr)
     except Exception as e:
         logger.warning("Failed to get audio duration for %s: %s", wav_path, e)
+    return None
+
+
+def get_cached_audio_path(video_id: str) -> str | None:
+    """Return the path of an existing, non-empty WAV file for a video ID.
+
+    Used as a download checkpoint: if a WAV file already exists in the temp
+    directory (e.g. a previous run downloaded and converted it before being
+    paused/interrupted), transcription can reuse it instead of re-downloading.
+
+    Returns:
+        The WAV path if a valid non-empty file exists, None otherwise.
+    """
+    if not re.match(r'^[a-zA-Z0-9_-]{11}$', video_id or ""):
+        return None
+    wav_path = _get_temp_dir() / f"{video_id}.wav"
+    try:
+        if wav_path.exists() and wav_path.stat().st_size > 1024:
+            logger.debug("[AUDIO] Reusing cached WAV: %s", wav_path)
+            return str(wav_path)
+    except OSError:
+        pass
     return None
 
 

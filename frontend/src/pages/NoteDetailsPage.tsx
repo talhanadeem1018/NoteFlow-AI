@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useNote } from "@/services/notes.service";
 import { useTranscript } from "@/services/transcription.service";
+import { useVideoMetadata } from "@/services/videos.service";
 import { useToast } from "@/components/ui/Toast";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorCard } from "@/components/ui/ErrorCard";
@@ -42,16 +43,22 @@ function formatDateFull(dateStr: string): string {
   });
 }
 
+/** Shape of the video metadata shown on the hero and Metadata tab. */
+interface VideoInfo {
+  meta: {
+    title: string;
+    channel: string;
+    thumbnail_url: string | null;
+    duration: number | null;
+    upload_date: string | null;
+    view_count: number | null;
+    video_id: string;
+  };
+  url: string;
+}
+
 /** Read video metadata from URL search params (set by GenerateWorkflow) */
-function readVideoMetaFromParams(searchParams: URLSearchParams): { meta: {
-  title: string;
-  channel: string;
-  thumbnail_url: string | null;
-  duration: number | null;
-  upload_date: string | null;
-  view_count: number | null;
-  video_id: string;
-}; url: string } | null {
+function readVideoMetaFromParams(searchParams: URLSearchParams): VideoInfo | null {
   const title = searchParams.get("title");
   if (!title) return null;
   return {
@@ -90,12 +97,50 @@ export function NoteDetailsPage() {
   const { data: note, isLoading, error, refetch } = useNote(noteId ?? "");
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
-  // Read video metadata from URL search params
-  const videoInfo = useMemo(() => readVideoMetaFromParams(searchParams), [searchParams.toString()]);
+  // Read video metadata from URL search params (set by GenerateWorkflow)
+  const paramVideoInfo = useMemo(() => readVideoMetaFromParams(searchParams), [searchParams.toString()]);
+  const [fetchedVideoInfo, setFetchedVideoInfo] = useState<VideoInfo | null>(null);
+  const videoInfo = fetchedVideoInfo ?? paramVideoInfo;
 
   // Transcript data
   const transcriptId = note?.transcript_id ?? "";
   const { data: transcript } = useTranscript(transcriptId);
+
+  // When the page is opened without URL params (e.g. "View" from My Notes),
+  // fetch the full video metadata from the transcript's stored video URL so
+  // the hero and Metadata tab always show all the info we have.
+  const fetchVideoMetadata = useVideoMetadata();
+  useEffect(() => {
+    const videoUrl = transcript?.video_url;
+    if (!videoUrl || videoInfo) return;
+
+    let cancelled = false;
+    fetchVideoMetadata
+      .mutateAsync({ url: videoUrl })
+      .then((meta) => {
+        if (cancelled) return;
+        setFetchedVideoInfo({
+          meta: {
+            title: meta.title,
+            channel: meta.channel,
+            thumbnail_url: meta.thumbnail_url,
+            duration: meta.duration,
+            upload_date: meta.upload_date,
+            view_count: meta.view_count,
+            video_id: meta.video_id,
+          },
+          url: videoUrl,
+        });
+      })
+      .catch(() => {
+        // Best-effort: the note page still works without video metadata.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcript?.video_url, videoInfo]);
 
   // Export hooks
   const { downloadPdf, loading: pdfLoading, progress: pdfProgress } = useDownloadPdf();

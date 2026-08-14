@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 
 export interface ActiveJob {
   jobId: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "pending" | "processing" | "completed" | "failed" | "paused" | "cancelled" | "interrupted";
   progressMessage: string | null;
   videoTitle?: string;
 }

@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAppStore } from "@/stores/app.store";
 import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
+import { isNotFoundError } from "@/services/processing.service";
 import { cn } from "@/utils/cn";
 import type { ProcessingStatusResponse } from "@/types";
 
@@ -25,18 +26,21 @@ function ActiveJobBadge() {
   const setActiveJob = useAppStore((s) => s.setActiveJob);
   const setPendingJobMetadata = useAppStore((s) => s.setPendingJobMetadata);
   const { addToast } = useToast();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
 
-  // Poll job status while activeJob exists (even on other pages)
+  // Poll job status while activeJob exists (even on other pages).
   // Only poll from the header when NOT on the dashboard to avoid
   // duplicating the polling done by GenerateWorkflow's useJobStatus.
+  // Polling is gated on authentication to avoid useless 401 requests
+  // while the Supabase session is loading or after sign-out.
   useEffect(() => {
-    if (!activeJob) return;
-
-    // Skip polling on dashboard — GenerateWorkflow/useJobStatus handles it
-    if (location.pathname === "/dashboard") return;
+    if (!activeJob?.jobId || !isAuthenticated) return;
 
     const interval = window.setInterval(async () => {
+      // Skip polling on the dashboard — GenerateWorkflow/useJobStatus handles
+      // it there, and two pollers would duplicate requests.
+      if (location.pathname === "/dashboard") return;
       try {
         const current = useAppStore.getState().activeJob;
         if (!current) return;
@@ -51,6 +55,17 @@ function ActiveJobBadge() {
           setActiveJob(null);
           setPendingJobMetadata(null);
           addToast(data.error_message || "Processing failed", "error");
+        } else if (data.status === "cancelled") {
+          // Terminal – clear the persisted badge state.
+          setActiveJob(null);
+          setPendingJobMetadata(null);
+        } else if (data.status === "paused" || data.status === "interrupted") {
+          // Stable – keep the badge so the user can return and resume.
+          setActiveJob({
+            ...current,
+            status: data.status,
+            progressMessage: data.progress_message,
+          });
         } else {
           setActiveJob({
             ...current,
@@ -58,30 +73,49 @@ function ActiveJobBadge() {
             progressMessage: data.progress_message,
           });
         }
-      } catch {
-        // Silently ignore poll errors — the job may have been cleaned up
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          // The job was deleted server-side – drop the persisted badge so we
+          // stop polling a non-existent job and a refresh can't restore it.
+          setActiveJob(null);
+          setPendingJobMetadata(null);
+        }
+        // Other errors (network/auth) are transient – keep polling next tick.
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [activeJob?.jobId, setActiveJob, setPendingJobMetadata, addToast]);
+  }, [activeJob?.jobId, isAuthenticated, location.pathname, setActiveJob, setPendingJobMetadata, addToast]);
 
   if (!activeJob) return null;
 
   const isOnDashboard = location.pathname === "/dashboard";
+  const isPaused = activeJob.status === "paused";
+  const isInterrupted = activeJob.status === "interrupted";
 
   return (
     <Link
       to="/dashboard"
-      className="group inline-flex items-center gap-2 rounded-lg border border-primary-800/40 bg-primary-900/30 px-3 py-1.5 text-xs font-medium text-primary-300 transition-all duration-200 hover:bg-primary-900/50 hover:border-primary-700/60"
+      className={cn(
+        "group inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-200",
+        isPaused || isInterrupted
+          ? "border-amber-800/40 bg-amber-900/30 text-amber-300 hover:bg-amber-900/50 hover:border-amber-700/60"
+          : "border-primary-800/40 bg-primary-900/30 text-primary-300 hover:bg-primary-900/50 hover:border-primary-700/60",
+      )}
     >
-      <ProcessingDot />
+      {isPaused || isInterrupted ? (
+        <span className="relative flex h-2 w-2">
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+        </span>
+      ) : (
+        <ProcessingDot />
+      )}
       <span className="hidden sm:inline truncate max-w-[140px]">
         {activeJob.videoTitle || "Processing video"}
       </span>
-      <span className="sm:hidden">Processing</span>
+      <span className="sm:hidden">{isPaused || isInterrupted ? "Paused" : "Processing"}</span>
       {!isOnDashboard && (
-        <svg className="h-3 w-3 text-primary-400 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="h-3 w-3 text-current opacity-70 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
         </svg>
       )}

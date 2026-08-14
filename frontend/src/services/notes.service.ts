@@ -21,7 +21,10 @@ export function useNotes(page = 1, pageSize = 20) {
     placeholderData: keepPreviousData, // Show previous page data while loading next
     staleTime: NOTES_LIST_STALE_TIME,
     gcTime: NOTES_LIST_GC_TIME,
-    refetchOnMount: false, // Rely on invalidation + staleTime
+    // Notes are also created by the async processing pipeline (GenerateWorkflow),
+    // which never runs the mutation invalidation above. Always refetch on mount so
+    // a freshly generated note shows up as soon as the list page is opened.
+    refetchOnMount: "always",
   });
 }
 

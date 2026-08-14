@@ -9,7 +9,7 @@ import os
 import time
 import wave
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from faster_whisper import WhisperModel
 
@@ -121,6 +121,7 @@ class WhisperService:
         language: str | None = None,
         beam_size: int | None = None,
         vad_filter: bool | None = None,
+        progress_callback: Callable[[int, float], None] | None = None,
     ) -> TranscriptionResult:
         """Transcribe an audio file using Whisper.
 
@@ -130,6 +131,11 @@ class WhisperService:
                      If None, auto-detects language.
             beam_size: Beam search size. Higher = better quality, slower.
             vad_filter: Enable Voice Activity Detection to skip silence.
+            progress_callback: Optional callback invoked periodically during
+                decoding with (segments_done, elapsed_seconds). It runs inside
+                the worker thread, so it must be lightweight (e.g. updating a
+                shared counter) – it cannot await. Used to surface live
+                progress while long videos decode.
 
         Returns:
             TranscriptionResult with full transcript, segments, and metadata.
@@ -196,6 +202,29 @@ class WhisperService:
             except Exception as wav_err:
                 logger.warning("[WHISPER] Failed to read WAV headers: %s", wav_err)
 
+            # ── Live progress reporting ────────────────────────────────
+            # Whisper decodes minutes of audio before the generator yields a
+            # result; log + invoke the progress callback at most every ~10s
+            # so callers and operators can see the job is alive and moving.
+            last_progress_log = time.time()
+
+            def _maybe_report(segments_done: int) -> None:
+                nonlocal last_progress_log
+                now = time.time()
+                if now - last_progress_log < 10.0:
+                    return
+                last_progress_log = now
+                elapsed = now - start_time
+                if progress_callback is not None:
+                    try:
+                        progress_callback(segments_done, elapsed)
+                    except Exception:
+                        logger.debug("[WHISPER] progress_callback raised", exc_info=True)
+                logger.info(
+                    "[WHISPER] Decoding progress: %d segment(s), %.1fs elapsed",
+                    segments_done, elapsed,
+                )
+
             # ── Build retry parameter combinations ──────────────────────
             # Try progressively more lenient settings if output is empty.
             retry_params: list[tuple[bool, str | None]] = []
@@ -260,6 +289,7 @@ class WhisperService:
                     )
                     segments.append(seg)
                     full_text_parts.append(seg.text)
+                    _maybe_report(len(segments))
 
                 processing_time = time.time() - start_time
                 full_text = " ".join(full_text_parts)
@@ -354,6 +384,7 @@ class WhisperService:
                     )
                     segments.append(seg)
                     full_text_parts.append(seg.text)
+                    _maybe_report(len(segments))
 
                 processing_time = time.time() - start_time
                 full_text = " ".join(full_text_parts)

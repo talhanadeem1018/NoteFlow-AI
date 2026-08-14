@@ -35,5 +35,8 @@ export const API_ENDPOINTS = {
   processing: {
     start: "/processing/start",
     byId: (id: string) => `/processing/${id}`,
+    pause: (id: string) => `/processing/${id}/pause`,
+    resume: (id: string) => `/processing/${id}/resume`,
+    cancel: (id: string) => `/processing/${id}/cancel`,
   },
 } as const;
