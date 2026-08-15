@@ -17,7 +17,10 @@ passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.18     # file upload support
 
 # ── YouTube Processing ──────────────────────────────────────────
-yt-dlp>=2025.1.0
+# Keep yt-dlp current: stale extractors are the #1 cause of YouTube's
+# "Sign in to confirm you're not a bot" block. 2026+ builds include the
+# alternate player-client / PO-token fixes used by the audio service.
+yt-dlp>=2026.1.1
 
 # ── AI (provider-agnostic) ─────────────────────────────────────
 openai>=1.60.0

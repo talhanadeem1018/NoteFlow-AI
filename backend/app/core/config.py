@@ -67,6 +67,22 @@ class Settings(BaseSettings):
     FFMPEG_PATH: str = "ffmpeg"
     FFPROBE_PATH: str = "ffprobe"
 
+    # ── YouTube / yt-dlp extraction hardening (server-side only) ──
+    # Comma-separated YouTube player clients tried in order. Mobile/TV
+    # clients are challenged far less often than the default `web` client,
+    # which increasingly demands PO tokens / sign-in on flagged datacenter
+    # IPs. This bypasses "Sign in to confirm you're not a bot" WITHOUT any
+    # user-supplied cookies or browser logins.
+    YTDLP_PLAYER_CLIENTS: str = "android,web_safari,ios,tv,mweb,web"
+
+    # Optional egress proxy (e.g. "http://user:pass@proxy:port") so operators
+    # can escape bot-flagged datacenter IPs. Empty = direct connection.
+    YTDLP_PROXY: str = ""
+
+    # Optional OPERATOR-provided Netscape cookies.txt for edge cases that
+    # still require a signed-in session. Never user-supplied; empty by default.
+    YTDLP_COOKIES_FILE: str = ""
+
     # ── Whisper (Speech-to-Text) ───────────────────────────────
     WHISPER_MODEL: str = "base"  # tiny | base | small | medium | large-v2 | large-v3
     WHISPER_DEVICE: str = "cpu"  # cpu | cuda

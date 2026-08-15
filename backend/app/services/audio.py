@@ -11,7 +11,6 @@ import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
 
 import yt_dlp
 
@@ -22,7 +21,12 @@ from app.core.exceptions import (
     VideoNotFoundError,
 )
 from app.schemas.video import AudioInfo
-from app.services.youtube import extract_video_id
+from app.services.youtube import (
+    BOT_CHECK_ERROR_MESSAGE,
+    build_ytdlp_options,
+    extract_video_id,
+    is_bot_check_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,31 +63,12 @@ def _validate_ffmpeg() -> None:
             )
 
 
-def _is_browser_cookie_error(error_message: str) -> bool:
-    """Return True when yt-dlp could not load cookies from the browser."""
-    normalized = error_message.lower()
-    return any(
-        token in normalized
-        for token in (
-            "cookiesfrombrowser",
-            "cookies from browser",
-            "browser cookie",
-            "cookie file",
-            "no browser",
-            "unable to find browser",
-            "could not find browser",
-            "parse_browser_specification",
-            "browser specification",
-        )
-    )
-
-
 def _is_retryable_download_error(error_message: str) -> bool:
     """Return True for transient yt-dlp failures that are safe to retry."""
     normalized = error_message.lower()
     if any(token in normalized for token in ("private", "unavailable", "deleted", "not found")):
         return False
-    if "sign in to confirm you're not a bot" in normalized or "captcha" in normalized:
+    if is_bot_check_error(error_message):
         return True
     return any(
         token in normalized
@@ -106,12 +91,9 @@ def _is_retryable_download_error(error_message: str) -> bool:
 
 def _get_download_error_message(error_message: str) -> str:
     """Convert yt-dlp output into a clearer user-facing error message."""
+    if is_bot_check_error(error_message):
+        return BOT_CHECK_ERROR_MESSAGE
     normalized = error_message.lower()
-    if "sign in to confirm you're not a bot" in normalized or "captcha" in normalized:
-        return (
-            "YouTube blocked the download with an anti-bot verification challenge. "
-            "Please try again later or ensure browser cookies are available."
-        )
     if any(token in normalized for token in ("private", "unavailable", "deleted", "not found")):
         return "Video is private, deleted, or unavailable."
     if any(token in normalized for token in ("http error 429", "too many requests", "rate limit")):
@@ -120,23 +102,19 @@ def _get_download_error_message(error_message: str) -> str:
 
 
 def _download_audio(url: str, output_path: str) -> str:
-    """Download audio-only using yt-dlp. Returns the path of the downloaded file."""
+    """Download audio-only using yt-dlp. Returns the path of the downloaded file.
+
+    Uses the shared hardened options (player-client fallback chain, optional
+    operator proxy / cookies file) from ``build_ytdlp_options``. No browser
+    cookies are ever read, so end users never configure anything.
+    """
     max_attempts = 3
+    last_error: str | None = None
 
     for attempt in range(max_attempts):
-        use_browser_cookies = os.getenv("YTDLP_USE_BROWSER_COOKIES", "").lower() in {"1", "true", "yes", "on"}
-        ydl_opts: dict[str, Any] = {
-            "format": "bestaudio/best",
-            "outtmpl": output_path,
-            "quiet": True,
-            "no_warnings": True,
-            "socket_timeout": 30,
-            "retries": 0,
-        }
-        if use_browser_cookies:
-            ydl_opts["cookiesfrombrowser"] = ["chrome", "firefox", "edge", "brave", "opera"]
-
         try:
+            ydl_opts = build_ytdlp_options(download=True, output_path=output_path)
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
 
@@ -155,12 +133,7 @@ def _download_audio(url: str, output_path: str) -> str:
         except yt_dlp.utils.DownloadError as e:
             error_text = str(e)
             error_msg = error_text.lower()
-
-            if use_browser_cookies and _is_browser_cookie_error(error_text):
-                logger.warning(
-                    "[AUDIO] Browser cookies unavailable for yt-dlp; falling back to standard download logic"
-                )
-                continue
+            last_error = error_text
 
             if _is_retryable_download_error(error_msg) and attempt < max_attempts - 1:
                 wait_seconds = 2**attempt
@@ -183,7 +156,12 @@ def _download_audio(url: str, output_path: str) -> str:
         except Exception as e:
             raise AudioDownloadError(f"Failed to download audio: {e}") from e
 
-    raise AudioDownloadError("The audio download failed after multiple attempts.")
+    # Safety net – normally unreachable because the last attempt raises above.
+    raise AudioDownloadError(
+        _get_download_error_message(last_error)
+        if last_error
+        else "The audio download failed after multiple attempts."
+    )
 
 
 def _convert_to_wav(input_path: str, video_id: str) -> str:
