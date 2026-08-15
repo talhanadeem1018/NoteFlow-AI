@@ -8,8 +8,10 @@ import asyncio
 import logging
 import os
 import re
+import shutil
 import subprocess
 import time
+import wave
 from pathlib import Path
 
 import yt_dlp
@@ -46,21 +48,64 @@ def _sanitize_video_id(video_id: str) -> str:
     return video_id
 
 
+def _get_bundled_ffmpeg() -> str | None:
+    """Return the path of the FFmpeg binary bundled with ``imageio-ffmpeg``.
+
+    Returns None when the package is not installed (or fails to provide a
+    binary), so callers fall back to other resolution strategies.
+    """
+    try:
+        import imageio_ffmpeg
+
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if exe and Path(exe).is_file():
+            return exe
+    except Exception:
+        logger.debug("[AUDIO] No bundled FFmpeg available via imageio-ffmpeg")
+    return None
+
+
+def _resolve_ffmpeg_path() -> str:
+    """Resolve the FFmpeg executable to use, in priority order.
+
+    1. Explicit operator configuration (``FFMPEG_PATH`` set to a real path).
+    2. An ``ffmpeg`` binary on the system PATH.
+    3. The static binary bundled with ``imageio-ffmpeg``.
+
+    Falls back to the configured value so ``_validate_ffmpeg`` can raise a
+    clear, actionable error when nothing is available.
+    """
+    configured = settings.FFMPEG_PATH
+    if configured and configured != "ffmpeg":
+        return configured
+
+    on_path = shutil.which("ffmpeg")
+    if on_path:
+        return on_path
+
+    bundled = _get_bundled_ffmpeg()
+    if bundled:
+        logger.info("[AUDIO] Using bundled FFmpeg from imageio-ffmpeg")
+        return bundled
+
+    return configured or "ffmpeg"
+
+
 def _validate_ffmpeg() -> None:
-    """Check that FFmpeg and FFprobe are available on the system."""
-    for tool, name in [(settings.FFMPEG_PATH, "FFmpeg"), (settings.FFPROBE_PATH, "FFprobe")]:
-        try:
-            subprocess.run(
-                [tool, "-version"],
-                capture_output=True,
-                check=True,
-                timeout=10,
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
-            raise AudioDownloadError(
-                f"{name} not found or not working at '{tool}'. "
-                f"Please install {name}: {e}"
-            )
+    """Check that a usable FFmpeg binary is available."""
+    tool = _resolve_ffmpeg_path()
+    try:
+        subprocess.run(
+            [tool, "-version"],
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+        raise AudioDownloadError(
+            f"FFmpeg not found or not working at '{tool}'. "
+            f"Please install FFmpeg or add it to PATH: {e}"
+        )
 
 
 def _is_retryable_download_error(error_message: str) -> bool:
@@ -171,7 +216,7 @@ def _convert_to_wav(input_path: str, video_id: str) -> str:
     output_path = str(output_dir / f"{video_id}.wav")
 
     cmd = [
-        settings.FFMPEG_PATH,
+        _resolve_ffmpeg_path(),
         "-y",                    # Overwrite output
         "-i", input_path,        # Input file
         "-ar", "16000",          # Sample rate: 16 kHz
@@ -292,24 +337,18 @@ async def download_and_convert_audio(url: str) -> AudioInfo:
 
 
 async def _get_audio_duration(wav_path: str) -> int | None:
-    """Get audio duration in seconds using ffprobe."""
+    """Get audio duration in seconds by reading the WAV header.
+
+    Uses the stdlib ``wave`` module instead of ffprobe, so no external
+    binary is required. Our WAV files are always PCM (16 kHz, mono, s16),
+    for which the header gives an exact duration.
+    """
     try:
-        cmd = [
-            settings.FFPROBE_PATH,
-            "-v", "quiet",
-            "-show_entries", "format=duration",
-            "-of", "csv=p=0",
-            wav_path,
-        ]
-        result = await asyncio.to_thread(
-            lambda: subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30
-            )
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return int(float(result.stdout.strip()))
-        else:
-            logger.warning("ffprobe failed for %s: %s", wav_path, result.stderr)
+        with wave.open(wav_path, "rb") as wav:
+            frames = wav.getnframes()
+            rate = wav.getframerate()
+            if frames > 0 and rate > 0:
+                return int(round(frames / rate))
     except Exception as e:
         logger.warning("Failed to get audio duration for %s: %s", wav_path, e)
     return None

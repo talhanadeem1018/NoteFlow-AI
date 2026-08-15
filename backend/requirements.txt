@@ -37,6 +37,12 @@ httpx>=0.28.0
 # ── Whisper (speech-to-text) ───────────────────────────────────
 faster-whisper>=1.1.0
 
+# ── FFmpeg (bundled static binary) ────────────────────────────
+# Ships a static FFmpeg executable inside the wheel, so audio conversion
+# works without installing FFmpeg system-wide (local dev, CI, and
+# Railway deploys all just work).
+imageio-ffmpeg>=0.6.0
+
 # ── Export (PDF / DOCX) ──────────────────────────────────────────
 fpdf2>=2.8.0
 python-docx>=1.1.0

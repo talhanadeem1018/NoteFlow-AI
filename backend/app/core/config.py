@@ -64,6 +64,9 @@ class Settings(BaseSettings):
 
     # ── YouTube Processing ──────────────────────────────────────
     YTDLP_PATH: str = "yt-dlp"
+    # FFmpeg is auto-resolved (FFMPEG_PATH -> PATH -> bundled imageio-ffmpeg
+    # binary), so a system install is never required. FFPROBE_PATH is kept
+    # for backwards compatibility but is no longer used by the app.
     FFMPEG_PATH: str = "ffmpeg"
     FFPROBE_PATH: str = "ffprobe"
 
