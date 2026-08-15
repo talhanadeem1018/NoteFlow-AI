@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAppStore } from "@/stores/app.store";
 import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
-import { isNotFoundError } from "@/services/processing.service";
+import { isNotFoundError, createInterruptedTracker } from "@/services/processing.service";
 import { cn } from "@/utils/cn";
 import type { ProcessingStatusResponse } from "@/types";
 
@@ -28,6 +28,8 @@ function ActiveJobBadge() {
   const { addToast } = useToast();
   const { isAuthenticated } = useAuth();
   const location = useLocation();
+  const interruptedTrackerRef = useRef(createInterruptedTracker());
+  const lastJobIdRef = useRef<string | null>(null);
 
   // Poll job status while activeJob exists (even on other pages).
   // Only poll from the header when NOT on the dashboard to avoid
@@ -36,6 +38,12 @@ function ActiveJobBadge() {
   // while the Supabase session is loading or after sign-out.
   useEffect(() => {
     if (!activeJob?.jobId || !isAuthenticated) return;
+
+    // Reset interrupted-confirmation state when the tracked job changes.
+    if (lastJobIdRef.current !== activeJob.jobId) {
+      lastJobIdRef.current = activeJob.jobId;
+      interruptedTrackerRef.current.reset();
+    }
 
     const interval = window.setInterval(async () => {
       // Skip polling on the dashboard — GenerateWorkflow/useJobStatus handles
@@ -59,14 +67,28 @@ function ActiveJobBadge() {
           // Terminal – clear the persisted badge state.
           setActiveJob(null);
           setPendingJobMetadata(null);
-        } else if (data.status === "paused" || data.status === "interrupted") {
-          // Stable – keep the badge so the user can return and resume.
+        } else if (data.status === "paused") {
+          // Deliberate user action – always show the paused badge.
+          interruptedTrackerRef.current.reset();
           setActiveJob({
             ...current,
             status: data.status,
             progressMessage: data.progress_message,
           });
+        } else if (data.status === "interrupted") {
+          // Only treat the job as interrupted once confirmed – the backend
+          // can report it (startup orphan recovery) while the worker is still
+          // alive and advancing in another process. Until then keep the badge
+          // in "Processing" mode and keep polling so the real status (e.g.
+          // completion) is reflected.
+          const confirmed = interruptedTrackerRef.current.observe(data);
+          setActiveJob({
+            ...current,
+            status: confirmed ? "interrupted" : "processing",
+            progressMessage: data.progress_message,
+          });
         } else {
+          interruptedTrackerRef.current.reset();
           setActiveJob({
             ...current,
             status: data.status,

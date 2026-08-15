@@ -114,8 +114,15 @@ export function GenerateWorkflow({ onNoteGenerated, onJobStatusChange }: Generat
   );
 
   const status = jobStatus.data?.status;
-  const isActive = status ? ACTIVE_STATUSES.includes(status) : false;
-  const isResumable = status ? RESUMABLE_STATUSES.includes(status) : false;
+  const interruptedConfirmed = jobStatus.interruptedConfirmed;
+  // The backend can report 'interrupted' (startup orphan recovery) while the
+  // original worker is still alive and decoding in another process. Treat it
+  // as still processing until useJobStatus CONFIRMS the interruption – only
+  // then show the "Processing interrupted" banner / Resume.
+  const effectiveStatus: ProcessingStatus | undefined =
+    status === "interrupted" && !interruptedConfirmed ? "processing" : status;
+  const isActive = effectiveStatus ? ACTIVE_STATUSES.includes(effectiveStatus) : false;
+  const isResumable = effectiveStatus ? RESUMABLE_STATUSES.includes(effectiveStatus) : false;
   const isCompleted = status === "completed";
   const isCancelled = status === "cancelled";
   const isFailed = status === "failed";
@@ -151,7 +158,7 @@ export function GenerateWorkflow({ onNoteGenerated, onJobStatusChange }: Generat
   useEffect(() => {
     if (!jobStatus.data) return;
 
-    const s = jobStatus.data.status;
+    const s = effectiveStatus;
 
     if (s === "completed") {
       setWorkflowStep("completed");
@@ -197,7 +204,7 @@ export function GenerateWorkflow({ onNoteGenerated, onJobStatusChange }: Generat
         });
       }
     }
-  }, [jobStatus.data, apiStep, onJobStatusChange, setActiveJob, setPendingJobMetadata, jobId, metadata]);
+  }, [jobStatus.data, apiStep, effectiveStatus, onJobStatusChange, setActiveJob, setPendingJobMetadata, jobId, metadata]);
 
   // ── Stale job: a 404 means the job no longer exists server-side ────
   // The backend returned 404 for this job ID (deleted / expired / DB reset).
@@ -473,15 +480,15 @@ export function GenerateWorkflow({ onNoteGenerated, onJobStatusChange }: Generat
           )}
 
           {/* Paused / Interrupted banner */}
-          {(status === "paused" || status === "interrupted") && (
+          {(effectiveStatus === "paused" || effectiveStatus === "interrupted") && (
             <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40" role="status">
-              <span className="mt-0.5 text-base" aria-hidden="true">{status === "paused" ? "⏸️" : "⚠️"}</span>
+              <span className="mt-0.5 text-base" aria-hidden="true">{effectiveStatus === "paused" ? "⏸️" : "⚠️"}</span>
               <div>
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  {status === "paused" ? "Processing paused" : "Processing interrupted"}
+                  {effectiveStatus === "paused" ? "Processing paused" : "Processing interrupted"}
                 </p>
                 <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300/80">
-                  {status === "paused"
+                  {effectiveStatus === "paused"
                     ? "Your progress is saved. Resume to continue from where you left off."
                     : "The connection to the server was lost. Your progress is saved — resume to continue."}
                 </p>
